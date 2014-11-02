@@ -16,16 +16,8 @@ include (${VTK_USE_FILE})
 FIND_PACKAGE(Qt4 REQUIRED)
 include (${QT_USE_FILE})
 
-#FIND_PACKAGE(HDF5 REQUIRED)
-#message(${HDF5_INCLUDE_DIR})
-#message(${HDF5_LIBRARIES})
-#include_directories(${HDF5_INCLUDE_DIR})
-
 FIND_PACKAGE(flann REQUIRED)
 include (${FLANN_USE_FILE})
-
-#set(CUDA_LIBRARIES "")
-#set(OPENCL_LIBRARIES "")
 
 if (BUILD_CUDA_LIB)
     find_package(CUDA)
@@ -89,13 +81,8 @@ target_link_libraries (AdaLearn2)
 add_executable(AdaSegment2 include/AdaSegment/AdaSegment2.cxx)
 target_link_libraries (AdaSegment2)
 
-#add_executable(TempProcess TempProcess.cpp)
-#target_link_libraries (TempProcess)
-
-add_subdirectory(Tools)
+#add_subdirectory(Tools)
 #add_subdirectory(Tests)
 add_subdirectory(Training)
 add_subdirectory(BuildingModel)
 add_subdirectory(ModelViewer)
-
-#file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/lib DESTINATION ${CMAKE_BINARY_DIR})
