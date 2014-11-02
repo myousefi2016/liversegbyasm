@@ -1,0 +1,113 @@
+Automatic Image Segmentation Adapter
+
+BACKGROUND 
+
+More and more automatic segmentation tools are publicly available to today's researchers. However, 
+when applied by their end-users, these segmentation tools usually can not achieve the performance 
+that the tool developer reported. Discrepancies between the tool developer and its users in manual 
+segmentation protocols and imaging modalities are the main reasons for such inconsistency.
+
+In this project, we will provide an open source learning-based software that automatically learns 
+how to transfer the output of a host segmentation tool closer to the user's manual segmentation 
+using the image data and manual segmentation provided by the user. The motivation of this project 
+is to bridge the gap between the segmentation tool developer and the tool users such that the 
+existing segmentation tools can more effectively serve the community.
+
+
+If you use this software to produce results for a publication, please cite the following paper.
+
+H. Wang, S. R. Das, J. W. Suh, M. Altinay, J. Pluta, C. Craige, B. B. Avants, and P. A. Yushkevich, 
+"A Learning-Based Wrapper Method to Correct Systematic Errors in Automatic Image Segmentation: 
+Consistently Improved Performance in Hippocampus, Cortex and Brain," Neuroimage, vol. 55, iss. 3, 
+pp. 968-985, 2011.
+
+
+
+DESCRIPTION OF THE SOFTWARE:
+
+Currently, the software package contains a simple implementation of a learning based algorithm. 
+Our program uses ITK's I/O functions to handle image input and output. Hence, it supports all image 
+formats that ITK supports. 
+
+To use our program to adapt a host segmentation program, the user needs to provide some training 
+data. Each training data contains one image, its manual segmentation and the automatic segmentation 
+produced by the host segmentation program for this image. We assume that background voxels have 
+label 0, and all non-background labels are positive intergers. Using these training data, our 
+program learns the consistent difference (bias) between the segmentation produced by the host 
+segmentation method and the user's manual segmentation. Only a few training data usually is 
+sufficient for the learning algorithm to work, but the program works better when more training data 
+are used. 
+
+The learning program is named "bl", short for bias learning. In a shell, type 
+
+./bl 
+
+to know how to use this program. This program learns how to make corrections for one label at a time. 
+Hence, the user should repeat the learning job for every label that needs to be corrected. 
+
+Basically, what the program does is to train one classifier to recognize each label. Hence, the user 
+should repeat the learning job for every label that needs to be corrected. The current implementation 
+assumes that the voxels manually assigned to any target label are not too far away from the voxels 
+assigned to this label by the host segmentation algorithm. Under this assumption, for better efficiency, 
+we only use the voxels obtained from dilating the voxels assigned to the target label by the host method 
+to train its bias correction classifier. Hence, it would be helpful to know what dilation radius is 
+appropriate for each label. When this information is missing, it is better to try with a larger radius.
+Note that if the host segmentation algorithm does not produce a label at all, under the assumption, our
+current program can not recover the errors related to that label.
+
+After the learning is finished, the user can apply the learned results to correct segmentation
+errors produced by the host segmentation program on the user's data. The program is named "sa", 
+short for segmentation adapter. Type
+
+./sa
+
+to know how to use this program. This program applies each learned classifier to evaluate every voxels,
+and assigns the label whose classifier gives the highed response in the corrected segmentation.
+
+This software is provided for research purpose only under the GNU General Public License. Since 
+I just implemented this software in C, there may have some bugs. The users are welcomed to 
+report bugs to me or fix the bugs by themselves.
+
+
+
+AN EXAMPLE:
+
+If the segmentation contains 4 labels, 0, 1, 2, 3 that need to be corrected. We 
+assume that background voxels have label 0, and all non-background labels are positive 
+intergers. We can apply the following bias learning commands. 
+
+./bl data/imageList data/manualList data/autoSegList 0 2 4x4x4 1 500 ./results/test1
+./bl data/imageList data/manualList data/autoSegList 1 2 4x4x4 1 500 ./results/test1 
+./bl data/imageList data/manualList data/autoSegList 2 2 4x4x4 1 500 ./results/test1
+./bl data/imageList data/manualList data/autoSegList 3 2 4x4x4 1 500 ./results/test1
+
+Please check the usage of "./bl" for the meaning of each parameter.
+
+After the learning is finished, for an image "data/sub99.nii.gz", to correct the segmentation 
+produced by the same host segmentation method, "data/sub99_autoSeg.nii.gz", we can apply the 
+following command.
+
+./sa data/sub99.nii.gz data/sub99_autoSeg.nii.gz ./results/test1  data/sub99_autoSeg_corrected.nii.gz
+
+The corrected segmentation is stored to "data/sub99_autoSeg_corrected.nii.gz."
+
+
+
+
+INSTRUCTIONS ON COMPILING THE CODE
+
+A cmake file is provided to facilitate compiling the code. The user needs to set up configurations for 
+compiling. To do so, go to the folder of the software package. Then type
+
+ccmake .
+
+to setup the enviroment. After this is done, type
+
+make 
+
+to complie and build the executable files.
+
+
+08/31/2010
+Hongzhi Wang
+wanghongzhi78@gmail.com

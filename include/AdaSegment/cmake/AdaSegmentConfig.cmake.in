@@ -1,0 +1,11 @@
+
+# The "use" file.
+set(AdaSegment_USE_FILE @AdaSegment_USE_FILE_CONFIG@)
+
+# Library directory.
+set(AdaSegment_LIBRARY_DIRS_CONFIG @AdaSegment_LIBRARY_PATH@)
+
+# Include directories needed.
+set(AdaSegment_INCLUDE_DIRS @AdaSegment_INCLUDE_DIRS_CONFIG@)
+
+set(AdaSegment_LIBRARIES @AdaSegment_LIBRARIES_CONFIG@)
