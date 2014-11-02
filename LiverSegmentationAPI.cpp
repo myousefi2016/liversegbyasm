@@ -262,7 +262,8 @@ void LiverSeg( km::Notifier* notifier,
 			  const char* geoFile,
 			  const char* atlasImageFile,
 			  const char* configFile,
-			  const KM_STRATEGY strategy)
+			  const char* varianceMapFile,
+			  const char* errorMapLiverFile)
 {
 	if ( notifier == NULL )
 	{
@@ -309,11 +310,19 @@ void LiverSeg( km::Notifier* notifier,
 		std::cout<<"configFile is NULL!"<<std::endl;
 		return;
 	}
+	if ( varianceMapFile == NULL )
+	{
+		std::cout<<"varianceMapFile is NULL!"<<std::endl;
+		return;
+	}
+	if ( errorMapLiverFile == NULL )
+	{
+		std::cout<<"errorMapLiverFile is NULL!"<<std::endl;
+		return;
+	}
 
 	KM_DEBUG_INFO("Load config file...");
 	km::loadConfig(configFile);
-
-	KM_DEBUG_PRINT("Segmentation strategy", strategy);
 
 	itk::TimeProbesCollectorBase chronometer;
 	itk::MemoryProbesCollectorBase memorymeter;
@@ -335,31 +344,35 @@ void LiverSeg( km::Notifier* notifier,
 	adaboostProfileClassifier_Liver.load(liverClassifierFile);
 
 	//¶ÁÈë´ý·Ö¸îÍ¼Ïñ
-	KM_DEBUG_INFO("read input image..");
+	KM_DEBUG_INFO("Read input image..");
 	KM_DEBUG_INFO(inputImageFile);
 	ShortImageType::Pointer inputImage = km::readImage<ShortImageType>( inputImageFile );
 	km::shiftMinimum<ShortImageType>( inputImage, -1024 );
 
-	KM_DEBUG_INFO("read atlas image..");
+	KM_DEBUG_INFO("Read atlas image..");
 	ShortImageType::Pointer atlasImage = km::readImage<ShortImageType>( atlasImageFile );
 
-	//Store the original image information for final segmentation mask generation.
+	KM_DEBUG_INFO("Store the original image information for final segmentation mask generation.");
 	ShortImageType::Pointer inputCached = ShortImageType::New();
 	inputCached->CopyInformation( inputImage );
 
 	double minval = -1024;
 	double maxval = 1024;
 
+	KM_DEBUG_INFO("Down-sample input image..");
 	SpacingType downspac;
 	downspac.Fill( RESAMPLE_SPACING );
-
 	inputImage = km::resampleImage<ShortImageType>( inputImage, downspac, minval );
+	if(WRITE_MIDDLE_RESULT)
+	{
+		km::writeImage<ShortImageType>( outputdir, "inputImage-downsampled.nii.gz", inputImage );
+	}
 
 	double zdist = RESAMPLE_SPACING * inputImage->GetLargestPossibleRegion().GetSize()[2];
 
 	if ( zdist > 400 )
 	{
-		KM_DEBUG_INFO("roi locating by template matching..");
+		KM_DEBUG_INFO("ROI locating by template matching..");
 		inputImage = km::extractRoiByTemplateMatching<ShortImageType, ShortImageType>( inputImage, atlasImage );
 	}
 
@@ -368,11 +381,10 @@ void LiverSeg( km::Notifier* notifier,
 		km::writeImage<ShortImageType>( outputdir, "inputImage.nii.gz", inputImage );
 	}
 
-	//return;
-
-	KM_DEBUG_INFO("histogram matching..");
+	KM_DEBUG_INFO("Histogram matching..");
 	inputImage = km::histogramMatch<ShortImageType>( inputImage, atlasImage );
 
+	KM_DEBUG_INFO("Smooth input image..");
 	inputImage = km::minMaxSmooth<ShortImageType>( inputImage, 3, 1.0, 1 );
 
 	if(WRITE_MIDDLE_RESULT)
@@ -380,9 +392,10 @@ void LiverSeg( km::Notifier* notifier,
 		km::writeImage<ShortImageType>( outputdir, "inputImageSmoothed.nii.gz", inputImage );
 	}
 
-	//Calculate gradient image.
+	KM_DEBUG_INFO("Calculate gradient image..");
 	GradientImageType::Pointer gradImage = km::calculateRecursiveGradientImage<ShortImageType, GradientImageType>( inputImage, SIGMA );
 
+	KM_DEBUG_INFO("Calculate minimum & maximum grey value..");
 	km::calculateMinAndMax<ShortImageType>( inputImage, minval, maxval );
 	KM_DEBUG_PRINT( "Min value", minval );
 	KM_DEBUG_PRINT( "Max value", maxval );
@@ -396,6 +409,7 @@ void LiverSeg( km::Notifier* notifier,
 	UCharImageType::Pointer liverMask  = UCharImageType::New();
 	UCharImageType::SizeType radius;
 
+	KM_DEBUG_INFO("Liver region initialization by region segmentation..");
 	{
 		g_phase = ADABOOST_REGION_SEGMENTATION;
 
@@ -517,10 +531,6 @@ void LiverSeg( km::Notifier* notifier,
 	MeshType::Pointer meanShapeMesh = model->DrawMean();
 
 	loadSimplexMeshGeometryData<MeshType>(geoImage, deformedMesh);
-
-	//FIXED
-	//MeshType::Pointer errorMap = km::readMesh<MeshType>("D:\\Workspace\\ASM\\projects\\LiverSegbyASM\\experiments\\training\\appearance\\output_20140815\\ErrorMap_LIVER.vtk");
-	//km::copyMeshData<MeshType, MeshType>( errorMap, referenceShapeMesh );
 	loadSimplexMeshGeometryData<MeshType>(geoImage, referenceShapeMesh);
 
 	typedef itk::StatisticalShapeModelTransform<RepresenterType, double, Dimension> ShapeTransformType;
@@ -667,8 +677,8 @@ void LiverSeg( km::Notifier* notifier,
 		std::cout<<std::endl;
 	}
 
-	MeshType::Pointer errorMapLiver = km::readMesh<MeshType>("D:\\Workspace\\ASM\\projects\\LiverSegbyASM\\experiments\\training\\appearance\\output_20140815\\ErrorMap_LIVER.vtk");
-	MeshType::Pointer varianceMap = km::readMesh<MeshType>("D:\\Workspace\\ASM\\projects\\LiverSegbyASM\\experiments\\buidModel\\shape\\meanMeshWithVariance.vtk");
+	MeshType::Pointer errorMapLiver = km::readMesh<MeshType>(errorMapLiverFile);
+	MeshType::Pointer varianceMap = km::readMesh<MeshType>(varianceMapFile);
 
 	//TEST
 	typedef itk::LinearInterpolateImageFunction<ShortImageType> IntensityInterpolatorType;
@@ -1025,10 +1035,7 @@ void LiverSeg( km::Notifier* notifier,
 	km::loadSimplexMeshGeometryData<MeshType>(geoImage, deformedMesh);
 	MeshType::Pointer triangleLiverMesh = km::simplexMeshToTriangleMesh<MeshType, MeshType>(deformedMesh);
 
-	if(WRITE_MIDDLE_RESULT)
-	{
-		km::writeMesh<MeshType>( outputdir, "triangleLiverMesh.vtk", triangleLiverMesh );
-	}
+	km::writeMesh<MeshType>( outputdir, "triangleLiverMesh.vtk", triangleLiverMesh );
 
 	UCharImageType::Pointer liversegmask = km::generateBinaryFromMesh<MeshType, UCharImageType, ShortImageType>(triangleLiverMesh, inputCached);
 
@@ -1039,10 +1046,7 @@ void LiverSeg( km::Notifier* notifier,
 
 	//liversegmask->Print(std::cout);
 
-	if (WRITE_MIDDLE_RESULT)
-	{
-		km::writeImage<UCharImageType>( outputdir, "finalResult.nii.gz", liversegmask );
-	}
+	km::writeImage<UCharImageType>( outputdir, "finalResult.nii.gz", liversegmask );
 
 	memorymeter.Stop( "segmentation" );
 	chronometer.Stop( "segmentation" );

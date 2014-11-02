@@ -69,12 +69,6 @@ install(TARGETS LiverSegmentationAPI DESTINATION lib EXPORT LiverSegASM-targets)
 add_executable(LiverSegmentation LiverSegmentation.cpp)
 target_link_libraries (LiverSegmentation LiverSegmentationAPI)
 
-add_executable(TestAdaboostClassifer TestAdaboostClassifer.cpp)
-target_link_libraries (TestAdaboostClassifer)
-
-add_executable(ProcessForAdboost ProcessForAdboost.cpp)
-target_link_libraries (ProcessForAdboost)
-
 add_executable(AdaLearn2 include/AdaSegment/AdaLearn2.cpp)
 target_link_libraries (AdaLearn2)
 

@@ -309,65 +309,6 @@ namespace km
 			km::writeMesh<SimplexMeshType>( ss.str().c_str(), reflivermesh );
 		}
 
-		//if (false/*profile_category == LIVER*/)
-		//{
-		//	//Clustered KNN 
-		//	try
-		//	{
-		//		//////////////////////////////////////////////////////////////////////////
-		//		//Write profiles.
-
-		//		std::stringstream ss;
-		//		ss << outputdir << "\\profile_" << category2string(profile_category) << "_clustered.h5";
-		//		KM_DEBUG_PRINT( "Output clustered profile file: ", ss.str().c_str() );
-
-		//		std::cout<<"Start to cluster classifier.."<<std::endl;
-		//		knnClassifier.cluster( 6 );
-		//		knnClassifier.print();
-		//		knnClassifier.save( ss.str().c_str() );
-
-		//		ss.str( std::string() );
-		//		ss.clear();
-
-		//		ss << outputdir << "\\AdaboostClassifier_" << category2string(profile_category) << "_clustered.h5";
-		//		KM_DEBUG_PRINT( "Output clustered adaboost classifier file: ", ss.str().c_str() );
-		//		AdaboostProfileClassifier adaboostClassifier_clustered(knnClassifier.profile_category);
-		//		adaboostClassifier_clustered.train( knnClassifier, outputdir );
-		//		adaboostClassifier_clustered.save(ss.str().c_str());
-
-		//		KM_DEBUG_INFO( "Generate labeled mesh..." );
-
-		//		SimplexMeshType::PointDataContainerPointer pointData = reflivermesh->GetPointData();
-		//		pointData->Reserve( reflivermesh->GetNumberOfPoints() );
-		//		SimplexMeshType::PointDataContainerIterator pointDataIt = pointData->Begin();
-		//		SimplexMeshType::PointDataContainerIterator pointDataItEnd = pointData->End();
-
-		//		while(pointDataIt!=pointDataItEnd)
-		//		{
-		//			SimplexMeshType::PointIdentifier idx = pointDataIt->Index();
-		//			pointData->SetElement( idx, static_cast<MeshPixelType>(knnClassifier.cluster_labels[idx][0]) );
-
-		//			idx++;
-		//			pointDataIt++;
-		//		}
-
-		//		km::writeMesh<SimplexMeshType>( outputdir, "ClusteredMesh.vtk", reflivermesh );
-		//		KM_DEBUG_INFO( "Generate labeled mesh done." );
-		//	}
-		//	catch ( itk::ExceptionObject & e )
-		//	{
-		//		std::cerr<<e.what()<<std::endl;
-		//	}
-		//	catch ( std::exception & e )
-		//	{
-		//		std::cerr<<e.what()<<std::endl;
-		//	}
-		//	catch ( ... )
-		//	{
-		//		std::cerr<<"Unkown exception thrown!"<<std::endl;
-		//	}
-		//}
-
 		return EXIT_SUCCESS;
 	}
 }

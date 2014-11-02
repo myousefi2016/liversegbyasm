@@ -174,7 +174,7 @@ void buildShapeModel(const char* datalist, const int referenceindex, const char*
 		++pointIterator;
 	}
 
-	km::writeMesh<MeshType>( "meanMeshWithVariance.vtk", meanMesh );
+	km::writeMesh<MeshType>( "varianceMap.vtk", meanMesh );
 }
 
 int main(int argc, char* argv[]) {

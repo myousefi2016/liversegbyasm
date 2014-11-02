@@ -29,7 +29,18 @@ int main(int argc, char* argv[])
 	if(argc<10)
 	{
 		std::cerr<<"Usage: "<<std::endl;
-		std::cout<<"       inputImage ssmFile outputDir boundaryClassifierFile liverClassifierFile adaboostSegmentFile geoFile atlasImage configFile"<<std::endl;
+		std::cout<<" inputImage"
+		         <<" SSMFile"
+                 <<" outputDir"
+				 <<" boundaryClassifierFile"
+				 <<" liverClassifierFile"
+				 <<" adaboostSegmentFile"
+				 <<" geoFile"
+				 <<" atlasImageFile"
+				 <<" configFile"
+				 <<" varianceMapFile"
+				 <<" errorMapLiverFile"
+				 <<std::endl;
 		return -1;
 	}
 
@@ -37,30 +48,41 @@ int main(int argc, char* argv[])
 
 	int paramidx = 1;
 
-	const char* inputimagefile = argv[paramidx++];
-	const char* ssmfile = argv[paramidx++];
+	const char* inputImageFile = argv[paramidx++];
+	const char* SSMFile = argv[paramidx++];
 	outputdir = argv[paramidx++];
 	const char* boundaryClassifierFile = argv[paramidx++];
 	const char* liverClassifierFile = argv[paramidx++];
 	const char* adaboostSegmentFile = argv[paramidx++];
-	const char* geofile = argv[paramidx++];
-	const char* atlasimagefile = argv[paramidx++];
+	const char* geoFile = argv[paramidx++];
+	const char* atlasImageFile = argv[paramidx++];
 	const char* configFile = argv[paramidx++];
+	const char* varianceMapFile = argv[paramidx++];
+	const char* errorMapLiverFile = argv[paramidx++];
 
-	const KM_STRATEGY strategy = static_cast<KM_STRATEGY>(1);
+	std::cout<<"** input image                 : " << inputImageFile << std::endl;
+	std::cout<<"** SSM file                    : " << SSMFile << std::endl;
+	std::cout<<"** output dir                  : " << outputdir << std::endl;
+	std::cout<<"** boundary classifier file    : " << boundaryClassifierFile << std::endl;
+	std::cout<<"** liver classifier file       : " << liverClassifierFile << std::endl;
+	std::cout<<"** adaboost segmentation file  : " << adaboostSegmentFile << std::endl;
+	std::cout<<"** geometry file               : " << geoFile << std::endl;
+	std::cout<<"** atlas image                 : " << atlasImageFile << std::endl;
+	std::cout<<"** config file                 : " <<configFile<<std::endl;
+	std::cout<<"** variance map                : " <<varianceMapFile<<std::endl;
+	std::cout<<"** error map liver             : " <<errorMapLiverFile<<std::endl;
 
-	std::cout<<"input image: " << inputimagefile << std::endl;
-	std::cout<<"SSM file: " << ssmfile << std::endl;
-	std::cout<<"output dir: " << outputdir << std::endl;
-	std::cout<<"boundary classifier file: " << boundaryClassifierFile << std::endl;
-	std::cout<<"liver classifier file: " << liverClassifierFile << std::endl;
-	std::cout<<"adaboost segmentation file: " << adaboostSegmentFile << std::endl;
-	std::cout<<"geometry file: " << geofile << std::endl;
-	std::cout<<"atlas image: " << atlasimagefile << std::endl;
-	std::cout<<"config file: "<<configFile<<std::endl;
-	std::cout<<"strategy: " << strategy << std::endl;
-
-	LiverSeg( notifier, inputimagefile, ssmfile, boundaryClassifierFile, liverClassifierFile, adaboostSegmentFile, geofile, atlasimagefile, configFile, strategy );
+	LiverSeg( notifier,
+	          inputImageFile,
+			  SSMFile,
+			  boundaryClassifierFile,
+			  liverClassifierFile,
+			  adaboostSegmentFile,
+			  geoFile,
+			  atlasImageFile,
+			  configFile,
+			  varianceMapFile,
+			  errorMapLiverFile);
 
 	return 0;
 }

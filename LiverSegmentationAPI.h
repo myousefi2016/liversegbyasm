@@ -1,15 +1,6 @@
 #ifndef _LiverSegmentation_H
 #define _LiverSegmentation_H
 
-enum KM_STRATEGY
-{
-	STRATEGY_1 = 1,
-    STRATEGY_2,
-	STRATEGY_3,
-	STRATEGY_4,
-	STRATEGY_5
-};
-
 #include <fstream>						// file I/O
 
 #include <itkImage.h>
@@ -103,6 +94,7 @@ void LiverSeg( km::Notifier* notifier,
 			   const char* geoFile,
 			   const char* atlasImageFile,
 			   const char* configFile,
-			   const KM_STRATEGY strategy = STRATEGY_1); //strategy: 1->5
+			   const char* varianceMap,
+			   const char* errorMapLiver);
 	
 #endif //_LiverSegmentation_H

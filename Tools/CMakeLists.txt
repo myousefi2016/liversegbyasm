@@ -22,3 +22,6 @@ target_link_libraries (toolDownsamplePolydata  ${ITK_LIBRARIES} ${VTK_LIBRARIES}
 
 add_executable (toolComputeMeshGeometry toolComputeMeshGeometry.cpp)
 target_link_libraries (toolComputeMeshGeometry  ${ITK_LIBRARIES} ${VTK_LIBRARIES})
+
+add_executable (toolProcessForAdboost toolProcessForAdboost.cpp)
+target_link_libraries (toolProcessForAdboost  ${ITK_LIBRARIES} ${VTK_LIBRARIES})

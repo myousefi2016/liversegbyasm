@@ -40,3 +40,6 @@ SET(CMAKE_VERBOSE_MAKEFILE ON)
 
 add_executable (TestKNNClassifer TestKNNClassifer.cpp ${ANN_SRC})
 target_link_libraries (TestKNNClassifer ${LiverSegSSM_LIRARIES} ${ITK_LIBRARIES} ${VTK_LIBRARIES})
+
+add_executable (TestAdaboostClassifer TestAdaboostClassifer.cpp ${ANN_SRC})
+target_link_libraries (TestAdaboostClassifer ${LiverSegSSM_LIRARIES} ${ITK_LIBRARIES} ${VTK_LIBRARIES})
