@@ -288,16 +288,16 @@ int AdaBoostTrain(FLOATTYPE* X, char* Y,unsigned long long int NSample, int NFea
             W[i] *= exp(-alpha*(double(CH[i])*double(Y[i])));
             totalW += W[i];
         }
-        cout<<"weighted error: "<<1-bwl.weightedRate<<":"<<weightedError<<endl;
+        //cout<<"weighted error: "<<1-bwl.weightedRate<<":"<<weightedError<<endl;
         for (i=0;i<NSample;i++)
 		{
             W[i] /= totalW;
         }
         second2=time(NULL);
-        cout<<"iter"<<CC<<"  trainingError:"<<trueError<<"  errorRatio:"<<trueError/NSample
-            <<"  featureID:"<<bwl.featureID<<"  alpha:"<<alpha
-            <<"  sign:"<<bwl.sign<<"  threshold:"<<bwl.threshold
-            <<"  time(s): "<<(second2-second1)<<endl;
+        //cout<<"iter"<<CC<<"  trainingError:"<<trueError<<"  errorRatio:"<<trueError/NSample
+        //    <<"  featureID:"<<bwl.featureID<<"  alpha:"<<alpha
+        //    <<"  sign:"<<bwl.sign<<"  threshold:"<<bwl.threshold
+        //    <<"  time(s): "<<(second2-second1)<<endl;
 
         AdaBoostTrainFile<<CC<<" "<<alpha<<" "<<weightedError<<" "<<bwl.featureID<<" "<<bwl.sign<<" "<<bwl.threshold<<" "<<trueError/NSample<<endl;
         second1=second2;

@@ -54,113 +54,74 @@ namespace km
 
 	typedef SimplexMeshType::PointType PointType;
 	typedef PointType::VectorType      VectorType;
-	//typedef itk::Vector< FLOATTYPE, Dimension > NormalVectorType;
-
-	char sampleFileName[1024];
-
-	std::ofstream sampleFile;
-
-	void extractProfile( 
-		GradientInterpolatorType * gradientInterpolator,
-		OriginalInterpolatorType * intensityInterpolator,
-		SimplexMeshType* livermesh,
-		PROFILE_CATEGORY category)
+	
+	struct ProfileUnit
 	{
-		PointsContainerConstPointer points  = livermesh->GetPoints();
-		GeometryMapIterator geoIt = livermesh->GetGeometryData()->Begin();
-		GeometryMapIterator geoItEnd = livermesh->GetGeometryData()->End();
+		PROFILE_CATEGORY category;
+		char sampleTxtFilename[1024];
+		char sampleHd5Filename[1024];
+		char classifierHd5FileName[1024];
+		std::ofstream sampleFile;
 
-		typedef GradientInterpolatorType::InputImageType GradientImageType;
-		GradientImageType::ConstPointer gradImage = gradientInterpolator->GetInputImage();
-
-		g_liverCentroid.CastFrom(km::getMeshCentroid<SimplexMeshType>( livermesh ));
-
-		SimplexMeshGeometry *geodata;
-		while (geoIt!=geoItEnd)
+		ProfileUnit(PROFILE_CATEGORY category_, const char* outputdir)
 		{
-			SimplexMeshType::PointIdentifier idx = geoIt.Index();
-			geodata = geoIt.Value();
+			category = category_;
+			std::stringstream ss0;
+			ss0 << outputdir << "\\samples_" << category2string(category_) << ".txt";
+			sprintf(sampleTxtFilename, "%s", ss0.str().c_str());
 
-			SimplexMeshType::PointType mpoint = points->GetElement( idx );
-			OriginalImageType::PointType ipoint;
-			ipoint.CastFrom( mpoint );
+			ss0.str( "" );
+			ss0.clear();
 
-			// compute normal
-			VectorType normal;
-			normal.Set_vnl_vector(geodata->normal.Get_vnl_vector());
+			ss0 << outputdir << "\\samples_" << category2string(category_) << ".h5";
+			sprintf(sampleHd5Filename, "%s", ss0.str().c_str());
 
-			//提取向法线内部方向shift后的位置的Profile
-			OriginalImageType::PointType ipoint_inside = ipoint;
-			for (int ttt=0;ttt<NUMBER_OF_INSIDE_PER_POINT;ttt++)
-			{
-				ipoint_inside -= normal*SHIFT_INSIDE;
+			ss0.str( "" );
+			ss0.clear();
 
-				std::vector<double> feature;
-				km::extractFeature<GradientInterpolatorType, OriginalInterpolatorType>(
-					gradientInterpolator, intensityInterpolator, geodata, ipoint_inside, feature, category, true);
-
-				sampleFile << IPClass;
-				for (int i=0;i<feature.size();i++)
-				{
-					sampleFile << " " << feature[i];
-				}
-				sampleFile << " " << std::endl;
-			}
-
-			//提取当前位置的Profile
-			OriginalImageType::PointType ipoint_boundary = ipoint;
-			for (int ttt=0;ttt<NUMBER_OF_BOUNDARY_PER_POINT;ttt++)
-			{
-				ipoint_boundary += normal*((float)rand()/RAND_MAX)*0.25;
-
-				std::vector<double> feature;
-				km::extractFeature<GradientInterpolatorType, OriginalInterpolatorType>(
-					gradientInterpolator, intensityInterpolator, geodata, ipoint_boundary, feature, category, true);
-
-				sampleFile << BPClass;
-				for (int i=0;i<feature.size();i++)
-				{
-					sampleFile << " " << feature[i];
-				}
-				sampleFile << " " << std::endl;
-			}
-
-			//提取向法线外部方向shift后的位置的Profile
-			OriginalImageType::PointType ipoint_outside = ipoint;
-			for (int ttt=0;ttt<NUMBER_OF_OUTSIDE_PER_POINT;ttt++)
-			{
-				//提取向法线内部方向shift后的位置的Profile
-				ipoint_outside += normal*SHIFT_OUTSIDE;
-
-				std::vector<double> feature;
-				km::extractFeature<GradientInterpolatorType, OriginalInterpolatorType>(
-					gradientInterpolator, intensityInterpolator, geodata, ipoint_outside, feature, category, true);
-
-				sampleFile << OPClass;
-				for (int i=0;i<feature.size();i++)
-				{
-					sampleFile << " " << feature[i];
-				}
-				sampleFile << " " << std::endl;
-			}
-
-			geoIt++;
+			ss0 << outputdir << "\\AdaboostClassifier_" << category2string(category_) << ".h5";
+			sprintf(classifierHd5FileName, "%s", ss0.str().c_str());
 		}
-	}
 
+		~ProfileUnit()
+		{
+			std::cout<<"De-constructor of ProfileUnit.."<<std::endl;
+			delete[] sampleTxtFilename;
+			delete[] sampleHd5Filename;
+			delete[] classifierHd5FileName;
+			std::cout<<"De-constructor end.."<<std::endl;
+		}
+
+		void openTxtStream()
+		{
+			if (!sampleFile.is_open())
+			{
+				sampleFile.open (sampleTxtFilename, std::ofstream::out | std::ofstream::app);
+			}
+		}
+
+		void closeTxtSteam()
+		{
+			if (sampleFile.is_open())
+			{
+				sampleFile.close();
+			}
+		}
+	};
+	
 	int trainAppearance( 
 		const char* origlistfile,
 		const char* meshlistfile,
 		const char* referencegeometryfile,
-		const char* outputdir,
-		PROFILE_CATEGORY profile_category)
+		const char* outputdir/*,
+		PROFILE_CATEGORY profile_category*/)
 	{
 		KM_DEBUG_INFO( "======================================" );
 		KM_DEBUG_PRINT( "original image list", origlistfile );
 		KM_DEBUG_PRINT( "shape mesh list", meshlistfile );
 		KM_DEBUG_PRINT( "reference geometry", referencegeometryfile );
 		KM_DEBUG_PRINT( "output directory", outputdir );
-		KM_DEBUG_PRINT( "profile category", category2string(profile_category) );
+		//KM_DEBUG_PRINT( "profile category", category2string(profile_category) );
 
 		srand(time(0));
 
@@ -187,7 +148,17 @@ namespace km
 			return EXIT_FAILURE;
 		}
 
-		int refidx = 7;
+		ProfileUnit profileUnitPlain(PLAIN, outputdir);
+		ProfileUnit profileUnitLiver(LIVER, outputdir);
+		ProfileUnit profileUnitBoundary(BOUNDARY, outputdir);
+		ProfileUnit profileUnitCoordinate(COORDINATE, outputdir);
+
+		profileUnitPlain.openTxtStream();
+		profileUnitLiver.openTxtStream();
+		profileUnitBoundary.openTxtStream();
+		profileUnitCoordinate.openTxtStream();
+
+		int refidx = 1;
 
 		refidx = std::min( numberOfData-1, refidx );
 
@@ -201,15 +172,6 @@ namespace km
 		const unsigned int numberOfPoints = reflivermesh->GetNumberOfPoints();
 		KM_DEBUG_PRINT( "Number of Points ", numberOfPoints );
 
-		std::stringstream ss0;
-		ss0 << outputdir << "\\samples_" << category2string(profile_category) << ".txt";
-
-		sprintf(sampleFileName, "%s", ss0.str().c_str());
-		
-		std::cout<<"Output sample file: "<< sampleFileName << std::endl;
-
-		sampleFile.open (sampleFileName, std::ofstream::out | std::ofstream::app);
-
 		for (unsigned int i=0;i<numberOfData;i++)
 		{
 			KM_DEBUG_PRINT("Start to extract appearance: ", i+1);
@@ -218,6 +180,8 @@ namespace km
 			km::loadSimplexMeshGeometryData<SimplexMeshType>(geometryImage, livermesh);
 
 			km::ComputeGeometry<SimplexMeshType>( livermesh, true );
+
+			g_liverCentroid.CastFrom(km::getMeshCentroid<SimplexMeshType>( livermesh ));
 
 			//读入图像
 			KM_DEBUG_INFO("Reading images..");
@@ -229,22 +193,17 @@ namespace km
 			downspac.Fill( RESAMPLE_SPACING );
 			origimage = km::resampleImage<OriginalImageType>( origimage, downspac );
 
-			//KM_DEBUG_INFO("Histogram matching..");
-			//origimage = km::histogramMatch<OriginalImageType>( origimage, reforigimage );
 			KM_DEBUG_INFO("Smoothing..");
 			origimage = km::minMaxSmooth<OriginalImageType>( origimage, 3, 1.0, 1.0 );
-			
-			//KM_DEBUG_INFO("Thresholding..");
-			//origimage = km::thresholdImage<OriginalImageType>( origimage, 0, 400, 0 );
 
 			KM_DEBUG_INFO( "Estimate liver threshold value" );
 
 			g_phase = TRAINING;
 
-			KM_DEBUG_INFO("Detect liver intensity range including tumor..");
+			KM_DEBUG_INFO("Detect liver intensity range..");
 			g_liverThresholds.clear();
-			//km::detectLiverIntensityRangeWithoutTumor<OriginalImageType, SimplexMeshType>( origimage, livermesh, g_liverThresholds );
-			km::detectLiverIntensityRangeIncludingTumor<OriginalImageType, SimplexMeshType>( origimage, livermesh, g_liverThresholds );
+			km::detectLiverIntensityRangeWithoutTumor<OriginalImageType, SimplexMeshType>( origimage, livermesh, g_liverThresholds );
+			//km::detectLiverIntensityRangeIncludingTumor<OriginalImageType, SimplexMeshType>( origimage, livermesh, g_liverThresholds );
 
 			for(int k=0;k<g_liverThresholds.size();k++)
 			{
@@ -261,51 +220,226 @@ namespace km
 			intensityInterpolator->SetInputImage( origimage );
 
 			KM_DEBUG_INFO( "Extract profile.." );
-			extractProfile( gradInterpolator, intensityInterpolator, livermesh, profile_category );
+			//extractProfile( gradInterpolator, intensityInterpolator, livermesh/*, profile_category*/ );
+			GeometryMapIterator geoIt = livermesh->GetGeometryData()->Begin();
+			GeometryMapIterator geoItEnd = livermesh->GetGeometryData()->End();
+			SimplexMeshGeometry *geodata;
+			while (geoIt!=geoItEnd)
+			{
+				SimplexMeshType::PointIdentifier idx = geoIt.Index();
+				geodata = geoIt.Value();
+
+				SimplexMeshType::PointType mpoint = livermesh->GetPoints()->GetElement( idx );
+				OriginalImageType::PointType ipoint;
+				ipoint.CastFrom( mpoint );
+
+				// compute normal
+				VectorType normal;
+				normal.Set_vnl_vector(geodata->normal.Get_vnl_vector());
+
+				//提取向法线内部方向shift后的位置的Profile
+				OriginalImageType::PointType ipoint_inside = ipoint;
+				for (int ttt=0;ttt<NUMBER_OF_INSIDE_PER_POINT;ttt++)
+				{
+					ipoint_inside -= normal*SHIFT_INSIDE;
+
+					/*****************Plain*****************/
+					std::vector<double> featurePlain;
+					km::extractFeature<GradientInterpolatorType, OriginalInterpolatorType>(
+						gradInterpolator, intensityInterpolator, geodata, ipoint_inside, featurePlain, profileUnitPlain.category);
+
+					profileUnitPlain.sampleFile << IPClass;
+					for (int i=0;i<featurePlain.size();i++)
+					{
+						profileUnitPlain.sampleFile << " " << featurePlain[i];
+					}
+					profileUnitPlain.sampleFile << " " << std::endl;
+
+					/*****************Liver*****************/
+					std::vector<double> featureLiver;
+					km::extractFeature<GradientInterpolatorType, OriginalInterpolatorType>(
+						gradInterpolator, intensityInterpolator, geodata, ipoint_inside, featureLiver, profileUnitLiver.category);
+
+					profileUnitLiver.sampleFile << IPClass;
+					for (int i=0;i<featureLiver.size();i++)
+					{
+						profileUnitLiver.sampleFile << " " << featureLiver[i];
+					}
+					profileUnitLiver.sampleFile << " " << std::endl;
+
+					/*****************Coordinate*****************/
+					std::vector<double> featureCoordinate;
+					km::extractFeature<GradientInterpolatorType, OriginalInterpolatorType>(
+						gradInterpolator, intensityInterpolator, geodata, ipoint_inside, featureCoordinate, profileUnitCoordinate.category);
+
+					profileUnitCoordinate.sampleFile << IPClass;
+					for (int i=0;i<featureCoordinate.size();i++)
+					{
+						profileUnitCoordinate.sampleFile << " " << featureCoordinate[i];
+					}
+					profileUnitCoordinate.sampleFile << " " << std::endl;
+				}
+
+				//提取当前位置的Profile
+				OriginalImageType::PointType ipoint_boundary = ipoint;
+				for (int ttt=0;ttt<NUMBER_OF_BOUNDARY_PER_POINT;ttt++)
+				{
+					//ipoint_boundary += normal*((float)rand()/RAND_MAX)*0.25;
+
+					/*****************Plain*****************/
+					std::vector<double> featurePlain;
+					km::extractFeature<GradientInterpolatorType, OriginalInterpolatorType>(
+						gradInterpolator, intensityInterpolator, geodata, ipoint_boundary, featurePlain, profileUnitPlain.category);
+
+					profileUnitPlain.sampleFile << BPClass;
+					for (int i=0;i<featurePlain.size();i++)
+					{
+						profileUnitPlain.sampleFile << " " << featurePlain[i];
+					}
+					profileUnitPlain.sampleFile << " " << std::endl;
+
+					///*****************Liver*****************/
+					//std::vector<double> featureLiver;
+					//km::extractFeature<GradientInterpolatorType, OriginalInterpolatorType>(
+					//	gradInterpolator, intensityInterpolator, geodata, ipoint_boundary, featureLiver, profileUnitLiver.category);
+
+					//profileUnitLiver.sampleFile << BPClass;
+					//for (int i=0;i<featureLiver.size();i++)
+					//{
+					//	profileUnitLiver.sampleFile << " " << featureLiver[i];
+					//}
+					//profileUnitLiver.sampleFile << " " << std::endl;
+
+					/*****************Coordinate*****************/
+					std::vector<double> featureCoordinate;
+					km::extractFeature<GradientInterpolatorType, OriginalInterpolatorType>(
+						gradInterpolator, intensityInterpolator, geodata, ipoint_boundary, featureCoordinate, profileUnitCoordinate.category);
+
+					profileUnitCoordinate.sampleFile << BPClass;
+					for (int i=0;i<featureCoordinate.size();i++)
+					{
+						profileUnitCoordinate.sampleFile << " " << featureCoordinate[i];
+					}
+					profileUnitCoordinate.sampleFile << " " << std::endl;
+				}
+
+				//提取向法线外部方向shift后的位置的Profile
+				OriginalImageType::PointType ipoint_outside = ipoint;
+				for (int ttt=0;ttt<NUMBER_OF_OUTSIDE_PER_POINT;ttt++)
+				{
+					//提取向法线内部方向shift后的位置的Profile
+					ipoint_outside += normal*SHIFT_OUTSIDE;
+
+					/*****************Plain*****************/
+					std::vector<double> featurePlain;
+					km::extractFeature<GradientInterpolatorType, OriginalInterpolatorType>(
+						gradInterpolator, intensityInterpolator, geodata, ipoint_outside, featurePlain, profileUnitPlain.category);
+
+					profileUnitPlain.sampleFile << OPClass;
+					for (int i=0;i<featurePlain.size();i++)
+					{
+						profileUnitPlain.sampleFile << " " << featurePlain[i];
+					}
+					profileUnitPlain.sampleFile << " " << std::endl;
+
+					/*****************Liver*****************/
+					std::vector<double> featureLiver;
+					km::extractFeature<GradientInterpolatorType, OriginalInterpolatorType>(
+						gradInterpolator, intensityInterpolator, geodata, ipoint_outside, featureLiver, profileUnitLiver.category);
+
+					profileUnitLiver.sampleFile << OPClass;
+					for (int i=0;i<featureLiver.size();i++)
+					{
+						profileUnitLiver.sampleFile << " " << featureLiver[i];
+					}
+					profileUnitLiver.sampleFile << " " << std::endl;
+
+					/*****************Coordinate*****************/
+					std::vector<double> featureCoordinate;
+					km::extractFeature<GradientInterpolatorType, OriginalInterpolatorType>(
+						gradInterpolator, intensityInterpolator, geodata, ipoint_outside, featureCoordinate, profileUnitCoordinate.category);
+
+					profileUnitCoordinate.sampleFile << OPClass;
+					for (int i=0;i<featureCoordinate.size();i++)
+					{
+						profileUnitCoordinate.sampleFile << " " << featureCoordinate[i];
+					}
+					profileUnitCoordinate.sampleFile << " " << std::endl;
+				}
+
+				geoIt++;
+			}
 
 			KM_DEBUG_PRINT( "Appearance generating done: ", i+1 );
 		}
 
-		sampleFile.close();
+		profileUnitPlain.closeTxtSteam();
+		profileUnitLiver.closeTxtSteam();
+		profileUnitBoundary.closeTxtSteam();
+		profileUnitCoordinate.closeTxtSteam();
 
-		//////////////////////////////////////////////////////////////////////////
-		if(true)
+		//Output plain sample.
+		//Write profiles.
+		km::KNNProfileClassifier knnClassifierPlain;
+		knnClassifierPlain.setShapeNumber(numberOfData);
+		knnClassifierPlain.setShapePointsNumber(numberOfPoints);
+		knnClassifierPlain.loadSamples( profileUnitPlain.sampleTxtFilename );
+		knnClassifierPlain.cluster(7);
+		knnClassifierPlain.save( profileUnitPlain.sampleHd5Filename );
 		{
-			//Write profiles.
-			std::stringstream ss;
-			ss << outputdir << "\\profile_" << category2string(profile_category) << ".h5";
-			KM_DEBUG_PRINT( "Output intensity profile file: ", ss.str().c_str() );
-			km::KNNProfileClassifier knnClassifier(profile_category);
-			knnClassifier.setShapeNumber(numberOfData);
-			knnClassifier.setShapePointsNumber(numberOfPoints);
-			knnClassifier.loadSamples( sampleFileName );
-			knnClassifier.save( ss.str().c_str() );
-
-			ss.str( "" );
-			ss.clear();
-
-			ss << outputdir << "\\AdaboostClassifier_" << category2string(profile_category) << ".h5";
-			KM_DEBUG_PRINT( "Output non-clustered adaboost classifier file: ", ss.str().c_str() );
-			km::AdaboostProfileClassifier adaboostClassifier(knnClassifier.profile_category);
-			adaboostClassifier.train( knnClassifier, outputdir );
-			adaboostClassifier.save(ss.str().c_str());
-
-			//Generate classifier map mesh.
-			KM_DEBUG_INFO("Generate classifier map mesh.");
-			km::AdaboostProfileClassifier::FloatVectorType error_map;
-			adaboostClassifier.generateErrorMap(knnClassifier, error_map);
 			km::assigneMesh<SimplexMeshType>( reflivermesh, 0.0 );
 			for (int pid=0;pid<reflivermesh->GetNumberOfPoints();pid++)
 			{
-				reflivermesh->SetPointData( pid, error_map[pid] );
+				reflivermesh->SetPointData( pid, knnClassifierPlain.cluster_labels[pid][0] );
 			}
 
-			km::smoothMeshData<SimplexMeshType>(reflivermesh, 2);
+			std::stringstream ss;
+			ss << outputdir << "\\ClusteredMeshPlain.vtk";
+			km::writeMesh<SimplexMeshType>( ss.str().c_str(), reflivermesh );
+		}
 
-			ss.str( "" );
-			ss.clear();
+		//Output liver sample & classifier.
+		km::KNNProfileClassifier knnClassifierLiver;
+		knnClassifierLiver.setShapeNumber(numberOfData);
+		knnClassifierLiver.setShapePointsNumber(numberOfPoints);
+		knnClassifierLiver.loadSamples( profileUnitLiver.sampleTxtFilename );
+		knnClassifierLiver.copyCluster(knnClassifierPlain);
+		knnClassifierLiver.save( profileUnitLiver.sampleHd5Filename );
+		{
+			km::AdaboostProfileClassifier adaboostClassifierLiver( profileUnitLiver.category );
+			adaboostClassifierLiver.train( knnClassifierLiver, outputdir );
+			adaboostClassifierLiver.save( profileUnitLiver.classifierHd5FileName );
 
-			ss << outputdir << "\\ErrorMap_" << category2string(profile_category) << ".vtk";
+			km::AdaboostProfileClassifier::IntFloatMapType errorMap;
+			adaboostClassifierLiver.test(knnClassifierLiver, errorMap);
+			km::assigneMesh<SimplexMeshType>( reflivermesh, 0.0 );
+			for (int pid=0;pid<reflivermesh->GetNumberOfPoints();pid++)
+			{
+				reflivermesh->SetPointData( pid, errorMap[knnClassifierLiver.cluster_labels[pid][0]] );
+			}
+
+			std::stringstream ss;
+			ss << outputdir << "\\ErrorMap.vtk";
+			km::writeMesh<SimplexMeshType>( ss.str().c_str(), reflivermesh );
+		}
+
+		//Output coordinate sample.
+		//Write profiles.
+		km::KNNProfileClassifier knnClassifierCoordinate;
+		knnClassifierCoordinate.setShapeNumber(numberOfData);
+		knnClassifierCoordinate.setShapePointsNumber(numberOfPoints);
+		knnClassifierCoordinate.loadSamples( profileUnitCoordinate.sampleTxtFilename );
+		knnClassifierCoordinate.cluster(11);
+		knnClassifierCoordinate.save( profileUnitCoordinate.sampleHd5Filename );
+		{
+			km::assigneMesh<SimplexMeshType>( reflivermesh, 0.0 );
+			for (int pid=0;pid<reflivermesh->GetNumberOfPoints();pid++)
+			{
+				reflivermesh->SetPointData( pid, knnClassifierCoordinate.cluster_labels[pid][0] );
+			}
+
+			std::stringstream ss;
+			ss << outputdir << "\\ClusteredMeshCoordinate.vtk";
 			km::writeMesh<SimplexMeshType>( ss.str().c_str(), reflivermesh );
 		}
 

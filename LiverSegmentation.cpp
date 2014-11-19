@@ -26,7 +26,7 @@ using namespace km;
 
 int main(int argc, char* argv[])
 {
-	if(argc<10)
+	if(argc<9)
 	{
 		std::cerr<<"Usage: "<<std::endl;
 		std::cout<<" inputImage"
@@ -39,7 +39,6 @@ int main(int argc, char* argv[])
 				 <<" atlasImageFile"
 				 <<" configFile"
 				 <<" varianceMapFile"
-				 <<" errorMapLiverFile"
 				 <<std::endl;
 		return -1;
 	}
@@ -58,7 +57,6 @@ int main(int argc, char* argv[])
 	const char* atlasImageFile = argv[paramidx++];
 	const char* configFile = argv[paramidx++];
 	const char* varianceMapFile = argv[paramidx++];
-	const char* errorMapLiverFile = argv[paramidx++];
 
 	std::cout<<"** input image                 : " << inputImageFile << std::endl;
 	std::cout<<"** SSM file                    : " << SSMFile << std::endl;
@@ -70,7 +68,6 @@ int main(int argc, char* argv[])
 	std::cout<<"** atlas image                 : " << atlasImageFile << std::endl;
 	std::cout<<"** config file                 : " <<configFile<<std::endl;
 	std::cout<<"** variance map                : " <<varianceMapFile<<std::endl;
-	std::cout<<"** error map liver             : " <<errorMapLiverFile<<std::endl;
 
 	LiverSeg( notifier,
 	          inputImageFile,
@@ -81,8 +78,7 @@ int main(int argc, char* argv[])
 			  geoFile,
 			  atlasImageFile,
 			  configFile,
-			  varianceMapFile,
-			  errorMapLiverFile);
+			  varianceMapFile);
 
 	return 0;
 }

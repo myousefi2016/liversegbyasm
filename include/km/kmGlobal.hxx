@@ -9,6 +9,30 @@
 
 namespace km
 {
+	string category2string(PROFILE_CATEGORY category)
+	{
+		if (category == BOUNDARY)
+		{
+			return "BOUNDARY";
+		}
+		else if (category == PLAIN)
+		{
+			return "PLAIN";
+		}
+		else if (category == LIVER)
+		{
+			return "LIVER";
+		}
+		else if (category == COORDINATE)
+		{
+			return "COORDINATE";
+		}
+		else
+		{
+			return "DEFAUTL";
+		}
+	}
+
 	static void loadConfig(const char* filename)
 	{
 		string line;

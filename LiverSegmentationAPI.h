@@ -94,7 +94,6 @@ void LiverSeg( km::Notifier* notifier,
 			   const char* geoFile,
 			   const char* atlasImageFile,
 			   const char* configFile,
-			   const char* varianceMap,
-			   const char* errorMapLiver);
+			   const char* varianceMap);
 	
 #endif //_LiverSegmentation_H

@@ -31,182 +31,16 @@
 #include "flann/flann.hpp"
 #include "flann/io/hdf5.h"
 
-#define KM_DEBUG_ERROR(X) std::cout<<"[DEBUG ERROR]"<<(X)<<std::endl;
+#include "kmGlobal.h"
 
 using namespace std;
 using namespace itk;
 using namespace flann;
 
-#define SIGMA 2.0 //采样梯度profile时，计算梯度场采样的参数sigma
-#define NEIGHBOR_RADIUS 1
-#define PROFILE_DIM 9
-#define PROFILE_SPACING 1.0 //毫米 PROFILE_LENTH/(PROFILE_DIM-1)
-#define PROFILE_INSIDE_RATIO 0.8
-#define SHIFT_INSIDE 2.0 //采样表面内profile时，样本从表面上向表面内偏移的距离
-#define SHIFT_OUTSIDE 3.0 //采样表面外profile时，样本从表面上向表面外偏移的距离
-#define NUMBER_OF_INSIDE_PER_POINT 5 // 在每个MESH点附近采样inside profile的数量。
-#define NUMBER_OF_BOUNDARY_PER_POINT 3 // 在每个MESH点附近采样boundary profile的数量。
-#define NUMBER_OF_OUTSIDE_PER_POINT 3 // 在每个MESH点附近采样outside profile的数量。
-#define NUMBER_OF_PROFILE_PER_POINT (NUMBER_OF_INSIDE_PER_POINT+NUMBER_OF_BOUNDARY_PER_POINT+NUMBER_OF_OUTSIDE_PER_POINT)
 
-#define RESAMPLE_SPACING 2.0
-
-#ifndef B_CLASS_TYPE
-typedef int BClassType;
-#define IPClass 0
-#define BPClass 1
-#define OPClass 2
-#endif
-
-enum PROCESS_PHASE
-{
-	INITIALIZATION = 0,
-	ROI_LOCATION,
-	ADABOOST_REGION_SEGMENTATION,
-	MODEL_FITTING_BY_DISTMAP,
-	TUMOR_DETECTION,
-	MODEL_FITTING_BY_LIVER_PROFILE,
-	DEFORMATION_BY_LIVER_PROFILE,
-	DEFORMATION_BY_BOUNDARY_PROFILE,
-	TRAINING
-};
-
-enum PROFILE_CATEGORY
-{
-	BOUNDARY = 0,
-	LIVER,
-	DEFAULT
-};
-
-static PROCESS_PHASE g_phase;
-static std::vector<std::pair<double, double>> g_liverThresholds;
-static itk::Point<double> g_liverCentroid;
 
 namespace km
 {
-	string category2string(PROFILE_CATEGORY category)
-	{
-		if (category == BOUNDARY)
-		{
-			return "BOUNDARY";
-		}
-		else if (category == LIVER)
-		{
-			return "LIVER";
-		}
-		else
-		{
-			return "DEFAUTL";
-		}
-	}
-
-	template<unsigned int Dimension>
-	class Profile
-	{
-	public:
-		typedef Profile<Dimension> Self;
-		typedef itk::Vector<float, Dimension> ValueVectorType;
-
-		itkStaticConstMacro(Dimension, unsigned, Dimension);
-
-		double spacing;
-		unsigned int index;
-		unsigned int kmclass;
-		BClassType bclass;
-		ValueVectorType value;
-
-		Profile():spacing(1.0), index(0), bclass(OPClass), kmclass(0)
-		{
-		
-		}
-
-		~Profile()
-		{
-
-		}
-
-		double GetNorm()
-		{
-			return value.GetNorm();
-		}
-
-		void Normalize()
-		{
-			double vv = this->GetNorm();
-			if (vv==0)
-			{
-				this->value.Fill(0);
-			}
-			else
-			{
-				value.Normalize();
-			}
-		}
-
-		void Sort( bool asc = true )
-		{
-			km::sort_insert<ValueVectorType>(this->value);
-		}
-
-		void Fill( double c )
-		{
-			value.Fill(c);
-		}
-
-		void Init()
-		{
-			spacing = 1.0;
-			index = 0;
-			bclass = OPClass;
-			kmclass = 0;
-			value.Fill(0.0);
-		}
-
-		friend ostream& operator <<(ostream &os,const Self &self)
-		{
-			os << self.index << '\t' << self.bclass << '\t' << self.kmclass << '\t';
-			for (int i=0;i<Dimension-1;i++)
-			{
-				os << self.value[i] << '\t';
-			}
-			os << self.value[Dimension-1];
-
-			return os;
-		}
-
-		float operator[](short index)
-		{
-			return value[index]; 
-		}
-
-		Self & operator=(const Self & self)
-		{
-			this->index = self.index;
-			this->bclass = self.bclass;
-			this->spacing = self.spacing;
-			this->kmclass = self.kmclass;
-
-			this->value = self.value;
-
-			return *this;
-		}
-	};
-
-	int binaryMappingItensity(double val)
-	{
-		bool belongToLiver = false;
-		for (int i=0;i<g_liverThresholds.size();i++)
-		{
-			if (g_liverThresholds[i].first <= val && g_liverThresholds[i].second >= val)
-			{
-				belongToLiver = true;
-				break;
-			}
-		}
-
-		return belongToLiver?1:0;
-	}
-
 	double mappingItensity( double val )
 	{
 		bool belongToLiver = false;
@@ -229,51 +63,38 @@ namespace km
 		return intensity;
 	}
 
-	template< class MeshType >
+	template<class T>
 	void
-		GetMeshNeighbors(const typename MeshType * mesh, typename MeshType::PointIdentifier idx, unsigned int radius, typename MeshType::NeighborListType& list)
+		calculateMeanAndStd(std::vector<T> & list, typename T& mean, typename T& sd)
 	{
-		typedef MeshType::NeighborListType NeighborListType;
-		typedef MeshType::IndexArray IndexArray;
-
-		if ( list.size() == 0 )
+		if (list.size()==0)
 		{
-			list.push_back(idx);
-
-			IndexArray neighborArray = mesh->GetNeighbors(idx);
-			list.push_back(neighborArray[0]);
-			list.push_back(neighborArray[1]);
-			list.push_back(neighborArray[2]);
-
-			if ( radius > 0 )
-			{
-				GetMeshNeighbors(mesh, neighborArray[0], radius - 1, list);
-				GetMeshNeighbors(mesh, neighborArray[1], radius - 1, list);
-				GetMeshNeighbors(mesh, neighborArray[2], radius - 1, list);
-			}
-
 			return;
 		}
-		else
+
+		mean = sd = 0.0;
+
+		double powered_sum = 0;
+		for (int i=0;i<list.size();i++)
 		{
-			IndexArray neighborArray = mesh->GetNeighbors(idx);
-
-			list.push_back(neighborArray[0]);
-			list.push_back(neighborArray[1]);
-			list.push_back(neighborArray[2]);
-
-			if ( radius == 0 )
-			{
-				return;
-			}
-			else
-			{
-				GetMeshNeighbors(mesh, neighborArray[0], radius - 1, list);
-				GetMeshNeighbors(mesh, neighborArray[1], radius - 1, list);
-				GetMeshNeighbors(mesh, neighborArray[2], radius - 1, list);
-				return;
-			}
+			powered_sum += list[i]*list[i];
+			mean += list[i];
 		}
+
+		mean /= list.size();
+
+		if (powered_sum <= 1e-6)
+		{
+			return;
+		}
+
+		for (int i=0;i<list.size();i++)
+		{
+			sd += (list[i]-mean)*(list[i]-mean);
+			//list[i] = std::sqrt( (list[i]*list[i])/powered_sum);
+		}
+
+		sd = std::sqrt( sd / list.size() );
 	}
 
 	template<class T>
@@ -327,8 +148,7 @@ namespace km
 		const itk::SimplexMeshGeometry* geoData,
 		const itk::SimplexMeshGeometry::PointType & ipoint,
 		std::vector<double> & feature,
-		PROFILE_CATEGORY category = LIVER,
-		bool flag_training = false)
+		PROFILE_CATEGORY profile_category = PLAIN)
 	{
 		typedef IntensityInterpolatorType::InputImageType IntensityImageType;
 		typedef IntensityImageType::PixelType IntensityPixelType;
@@ -372,47 +192,50 @@ namespace km
 			profilePos += normal*spa;
 		}
 
-		if (category == BOUNDARY)
+		if (profile_category == PLAIN)
+		{
+			//VectorType coordiOffset = g_liverCentroid - ipoint;
+			////coordiOffset.Normalize();
+			//for (int i=0;i<coordiOffset.Dimension;i++)
+			//{
+			//	feature.push_back(coordiOffset[i]);
+			//}
+
+			//gray_list.push_back( g_liverThresholds[0].second - g_liverThresholds[0].first );//For distinguish liver tissue and plain background.
+			//km::normalizeList<double>(gray_list);
+			for (int i=0;i<gray_list.size();i++)
+			{
+				feature.push_back(gray_list[i]);
+			}
+		}
+		else if (profile_category == LIVER)
 		{
 			//For distinguish liver tissue and plain background.
 			double gray_mean, gray_sd;
-			km::normalizeList<double>(gray_list, gray_mean, gray_sd);
+			km::calculateMeanAndStd<double>(gray_list, gray_mean, gray_sd);
 			feature.push_back(gray_mean);
 			feature.push_back(gray_sd);
-
 			for (int i=0;i<gray_list.size();i++)
 			{
 				feature.push_back(gray_list[i]);
 			}
 
-			km::normalizeList<double>(gradient_list);
+			double gradient_mean, gradient_sd;
+			km::calculateMeanAndStd<double>(gradient_list, gradient_mean, gradient_sd);
+			feature.push_back(gradient_mean);
+			feature.push_back(gradient_sd);
 			for (int i=0;i<gradient_list.size();i++)
 			{
 				feature.push_back(gradient_list[i]);
 			}
 		}
-		else if (category == LIVER)
+		else if (profile_category == COORDINATE)
 		{
-			//For distinguish liver tissue and plain background.
-			double gray_mean, gray_sd;
-			km::normalizeList<double>(gray_list, gray_mean, gray_sd);
-			feature.push_back(gray_mean);
-			feature.push_back(gray_sd);
-
-			for (int i=0;i<gray_list.size();i++)
+			VectorType coordiOffset = g_liverCentroid - ipoint;
+			for (int i=0;i<coordiOffset.Dimension;i++)
 			{
-				feature.push_back(gray_list[i]);
+				feature.push_back(coordiOffset[i]);
 			}
-
-			km::normalizeList<double>(gradient_list);
-			for (int i=0;i<gradient_list.size();i++)
-			{
-				feature.push_back(gradient_list[i]);
-			}
-		}
-		else
-		{
-			std::cout<<"Current unsupported category: "<<category<<std::endl;
 		}
 	}
 
@@ -673,7 +496,7 @@ namespace km
 		int  shape_points_number;
 		int  profile_dimension;
 
-		PROFILE_CATEGORY profile_category;
+		//PROFILE_CATEGORY profile_category;
 
 		IndexMatrixType   cluster_labels;
 		IntegerMatrixType shape_number_matrix;
@@ -688,7 +511,7 @@ namespace km
 		bool is_initilized;
 
 	public:
-		KNNProfileClassifier( PROFILE_CATEGORY p_category = LIVER )
+		KNNProfileClassifier( /*PROFILE_CATEGORY p_category = INSIDE */)
 		{
 			is_initilized = false;
 			max_neighbour = 11;
@@ -696,7 +519,7 @@ namespace km
 			shape_points_number = 0;
 			profile_dimension = 0;
 
-			profile_category = p_category;
+			//profile_category = p_category;
 		}
 
 		~KNNProfileClassifier()
@@ -894,6 +717,8 @@ namespace km
 			std::cout<<"profile_count: "<<profile_count_<<std::endl; 
 			std::cout<<"profile_dimension: "<<profile_dimension_<<std::endl;
 
+			profile_dimension = profile_dimension_;
+
 			this->initilize(profile_count_, profile_dimension_);
 
 			 BClassType label;
@@ -1014,6 +839,7 @@ namespace km
 
 		void save( const char* filename )
 		{
+			std::cout<<"Start to save profiles..."<<std::endl;
 			KNNUnitMapType::iterator it = knnUnitMap.begin();
 			KNNUnitMapType::iterator itEnd = knnUnitMap.end();
 
@@ -1106,8 +932,8 @@ namespace km
 
 		void cluster( int cluster_number )
 		{
-			std::cout<<"Currently we don't support clustered KNN classifier."<<std::endl;
-			return;
+			//std::cout<<"Currently we don't support clustered KNN classifier."<<std::endl;
+			//return;
 
 			if (!is_initilized)
 			{
@@ -1121,13 +947,16 @@ namespace km
 				return;
 			}
 
-			const unsigned int measureLength = PROFILE_DIM*shape_number*NUMBER_OF_PROFILE_PER_POINT;
+			KNNUnit* unitDefault = knnUnitMap[0];
+
+			int numberOfSamplesPerLandmark = (unitDefault->getPointsCount()/shape_number)/shape_points_number;
+			std::cout<<"number of samples per landmark: "<<numberOfSamplesPerLandmark<<std::endl;
+
+			const unsigned int measureLength = profile_dimension*shape_number*numberOfSamplesPerLandmark;
 			const unsigned int measureCount = shape_points_number;
 
-			//std::cout<<"measure length: "<<measureLength<<std::endl;
-			//std::cout<<"measure count:"<<measureCount<<std::endl;
-
-			KNNUnit* unitDefault = knnUnitMap[0];
+			std::cout<<"measure length: "<<measureLength<<std::endl;
+			std::cout<<"measure count:"<<measureCount<<std::endl;
 
 			typedef itk::VariableLengthVector< double> MeasurementVectorType;
 			typedef itk::Statistics::ListSample< MeasurementVectorType > SampleType;
@@ -1141,14 +970,16 @@ namespace km
 			{
 				for (int j=0;j<shape_number;j++)
 				{
-					for (int k=0;k<NUMBER_OF_PROFILE_PER_POINT;k++)
+					for (int k=0;k<numberOfSamplesPerLandmark;k++)
 					{
-						for (int t=0;t<PROFILE_DIM;t++)
+						for (int t=0;t<profile_dimension;t++)
 						{
-							mv[ j*NUMBER_OF_PROFILE_PER_POINT*PROFILE_DIM + k*PROFILE_DIM + t ] = unitDefault->dataset[j*shape_points_number*NUMBER_OF_PROFILE_PER_POINT + i*NUMBER_OF_PROFILE_PER_POINT + k][t];
+							mv[ j*numberOfSamplesPerLandmark*profile_dimension + k*profile_dimension + t ] = unitDefault->dataset[j*shape_points_number*numberOfSamplesPerLandmark + i*numberOfSamplesPerLandmark + k][t];
 						}
 					}
 				}
+
+				//std::cout<<mv<<std::endl;
 
 				//std::cout<<mv<<std::endl;
 				sample->PushBack( mv );
@@ -1267,7 +1098,9 @@ namespace km
 			for ( int i=0;i<cluster_labels_set.rows;i++ )
 			{
 				int cl = cluster_labels_set[i][0];
-				unsigned long count = clusterCountMap[cl] * this->shape_number * NUMBER_OF_PROFILE_PER_POINT;
+				std::cout<<"Profile count for cluster label "<<cl<<": "<<clusterCountMap[cl]<<std::endl;
+
+				unsigned long count = clusterCountMap[cl] * this->shape_number * numberOfSamplesPerLandmark;
 
 				DatasetMatrixType datasetTmp(new float[count*profile_dimension], count, profile_dimension);
 				LabelMatrixType   labelsTmp(new int[count], count, 1);
@@ -1286,16 +1119,74 @@ namespace km
 					ptmatrix[0][c] = unitDefault->dataset[r][c];
 				}
 
-				int cl = this->cluster_labels[r%(shape_points_number*NUMBER_OF_PROFILE_PER_POINT)/NUMBER_OF_PROFILE_PER_POINT][0];
+				int cl = this->cluster_labels[r%(shape_points_number*numberOfSamplesPerLandmark)/numberOfSamplesPerLandmark][0];
 				this->push_back( label, ptmatrix, cl );
 			}
 
-			this->buildIndex();
+			//this->buildIndex();
 
 			//DELETE_NULLABLE_PRT(ptmatrix);
 			delete unitDefault;
 
 			std::cout<<"Cluster done!!"<<std::endl;
+		}
+
+		void copyCluster(km::KNNProfileClassifier & classiferSource)
+		{
+			const int cluster_number = classiferSource.cluster_labels_set.rows;
+			cluster_labels_set = IndexMatrixType(new int[cluster_number], cluster_number, 1);
+
+			//Copy cluster label set.
+			for (int i=0;i<classiferSource.cluster_labels_set.rows;i++)
+			{
+				this->cluster_labels_set[i][0] = classiferSource.cluster_labels_set[i][0];
+			}
+
+			//Copy cluster labels.
+			for (int i=0;i<classiferSource.cluster_labels.rows;i++)
+			{
+				this->cluster_labels[i][0] = classiferSource.cluster_labels[i][0];
+			}
+
+			KNNUnit* unitDefault = knnUnitMap[0];
+
+			int numberOfSamplesPerLandmark = (unitDefault->getPointsCount()/shape_number)/shape_points_number;
+
+			//Calculate profile number for each cluster for allocating.
+			for ( int i=0;i<classiferSource.cluster_labels_set.rows;i++ )
+			{
+				int cl = classiferSource.cluster_labels_set[i][0]; //cluster label
+				KNNUnit* sourceUnit = classiferSource.knnUnitMap[cl];
+
+				unsigned long profileCount = sourceUnit->getPointsCount();
+
+				DatasetMatrixType datasetTmp(new float[profileCount*profile_dimension], profileCount, profile_dimension);
+				LabelMatrixType   labelsTmp(new int[profileCount], profileCount, 1);
+
+				KNNUnit* unit = new KNNUnit( datasetTmp, labelsTmp, cl );
+				knnUnitMap[cl] = unit;
+			}
+
+			PointMatrixType ptmatrix = PointMatrixType(new float[profile_dimension], 1, profile_dimension);
+
+			for (unsigned long r=0;r<unitDefault->dataset.rows && r<unitDefault->labels.rows; r++)
+			{
+				int label = unitDefault->labels[r][0];
+				for (int c=0;c<profile_dimension;c++)
+				{
+					ptmatrix[0][c] = unitDefault->dataset[r][c];
+				}
+
+				int cl = this->cluster_labels[r%(shape_points_number*numberOfSamplesPerLandmark)/numberOfSamplesPerLandmark][0];
+				this->push_back( label, ptmatrix, cl );
+			}
+
+			//this->buildIndex();
+
+			//DELETE_NULLABLE_PRT(ptmatrix);
+			delete unitDefault;
+
+			std::cout<<"Copy cluster done!!"<<std::endl;
 		}
 
 		void print()
@@ -1363,9 +1254,20 @@ namespace km
 						return 0;
 					}
 				}
-				else
+				else if(profile_category == LIVER)
 				{
 					if (c == IPClass)
+					{
+						return 1;
+					}
+					else
+					{
+						return 0;
+					}
+				}
+				else
+				{
+					if (c == OPClass)
 					{
 						return 1;
 					}
@@ -1473,7 +1375,7 @@ namespace km
 		typedef std::pair<int, AdaboostUnit*> AdaboostUnitPairType;
 		typedef std::map<int, AdaboostUnit*> AdaboostUnitMapType;
 		AdaboostUnitMapType adaboostUnitMap;
-		typedef std::vector<double> FloatVectorType;
+		typedef std::map<int, float> IntFloatMapType;
 
 		AdaboostProfileClassifier( PROFILE_CATEGORY category )
 		{
@@ -1486,8 +1388,8 @@ namespace km
 		~AdaboostProfileClassifier()
 		{
 			std::cout<<"De-constructor of AdaboostProfileClassifier.."<<std::endl;
-			DELETE_NULLABLE_PRT(cluster_labels);
-			DELETE_NULLABLE_PRT(cluster_labels_set);
+			//DELETE_NULLABLE_PRT(cluster_labels);
+			//DELETE_NULLABLE_PRT(cluster_labels_set);
 			std::cout<<"De-constructor end.."<<std::endl;
 		}
 
@@ -1561,6 +1463,13 @@ namespace km
 
 		void train(KNNProfileClassifier & classifier, const char* outputdir = NULL)
 		{
+			std::cout<<"***Label set: ";
+			for (int tt=0;tt<classifier.cluster_labels_set.rows;tt++)
+			{
+				std::cout<<classifier.cluster_labels_set[tt][0]<<" ";
+			}
+			std::cout<<std::endl;
+
 			classifier.getClusterLabelAndLabelSet( cluster_labels, cluster_labels_set );
 
 			std::map<int, std::string> adaboostfilenames;
@@ -1570,6 +1479,7 @@ namespace km
 			for (int tt=0;tt<cluster_labels_set.rows;tt++)
 			{
 				int cl = cluster_labels_set[tt][0];
+				std::cout<<"Start to train classifer for label "<<cl<<std::endl;
 				AdaboostUnit * unit = new AdaboostUnit(profile_category);
 				unit->cluster_label = cl;
 				adaboostUnitMap[cl] = unit;
@@ -1578,7 +1488,7 @@ namespace km
 				LabelMatrixType tmplabelset;
 				classifier.getDatasetAndLabels(tmpdataset, tmplabelset, cl);
 				
-				assert( samples.rows == labels.rows );
+				assert( tmpdataset.rows == tmplabelset.rows );
 
 				int NFeature = tmpdataset.cols;
 				unsigned long long NSample = tmpdataset.cols * tmpdataset.rows;
@@ -1750,46 +1660,16 @@ namespace km
 			}
 		}
 
-		void generateErrorMap(KNNProfileClassifier & classifer, FloatVectorType&  error_map)
+		void test(KNNProfileClassifier & classifier, IntFloatMapType & errorMap)
 		{
-			std::cout<<"Number of points: "<<classifer.shape_points_number<<std::endl;
-			//Initialize the map.
-			//positive_ratio_map.reserve( classifer.shape_points_number );
-			error_map.resize( classifer.shape_points_number );
-
-			for (int i=0;i<classifer.shape_points_number;i++)
-			{
-				error_map[i] = 0.0;
-			}
-			
-			DatasetMatrixType tmpdataset;
-			LabelMatrixType tmplabelset;
-			classifer.getDatasetAndLabels(tmpdataset, tmplabelset);
-			for (int row_id=0;row_id<tmpdataset.rows;row_id++)
-			{
-				int ptid = (row_id%(classifer.shape_points_number*NUMBER_OF_PROFILE_PER_POINT))/NUMBER_OF_PROFILE_PER_POINT;
-				if (ptid>=classifer.shape_points_number)
-				{
-					std::cout<<"Wrong point id: "<<ptid<<std::endl;
-				}
-				
-				AdaboostUnit* unit = this->getAdaboostUnitByPointIndex(ptid);
-				int positive_count = unit->check_positive(tmpdataset, tmplabelset, row_id);
-				error_map[ptid] += (1-positive_count);
-			}
-
-			for (int i=0;i<error_map.size();i++)
-			{
-				error_map[i] /= (classifer.shape_number*NUMBER_OF_PROFILE_PER_POINT);
-			}
-		}
-		
-		void test(KNNProfileClassifier & classifier, double ratio_testing)
-		{
-			std::cout<<"Start to test classifying of ratio "<<ratio_testing<<"..."<<std::endl;
-
 			double ratio_weighted = 0.0;
 			unsigned long pt_count_sum = 0;
+
+			//Initialize error map.
+			for (int i=0;i<cluster_labels_set.rows;i++)
+			{
+				errorMap[cluster_labels_set[i][0]] = 0;
+			}
 
 			for (int i=0;i<cluster_labels_set.rows;i++)
 			{
@@ -1797,22 +1677,27 @@ namespace km
 				AdaboostUnit* adaboostUnit = this->getAdaboostUnitByClusterLabel(cl);
 
 				KNNProfileClassifier::KNNUnit* knnUnit = classifier.getKNNUnitByClusterLabel(cl);
-				DatasetMatrixType testingDataset;
-				LabelMatrixType   testingLabels;
-				knnUnit->generateTestDataset(testingDataset, testingLabels, ratio_testing);
 
-				double success_ratio = adaboostUnit->test( testingDataset, testingLabels );
+				double success_ratio = adaboostUnit->test( knnUnit->dataset, knnUnit->labels );
 
 				std::cout<<"Label->"<<cl<<"; Success Ratio->"<<success_ratio<<std::endl;
 
 				pt_count_sum += knnUnit->getPointsCount();
 				ratio_weighted += success_ratio*knnUnit->getPointsCount();
+
+				errorMap[cl] = success_ratio;
 			}
 
 			ratio_weighted /= pt_count_sum;
 
 			std::cout<<"Success Ratio Weighted: "<<ratio_weighted<<std::endl;
-			std::cout<<"Test done!!!"<<std::endl;			
+			std::cout<<"Test done!!!"<<std::endl;	
+		}
+		
+		void test(KNNProfileClassifier & classifier)
+		{
+			IntFloatMapType errorMap;
+			test(classifier, errorMap);
 		}
 	};
 #undef DELETE_NULLABLE_PRT

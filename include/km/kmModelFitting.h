@@ -27,8 +27,9 @@
 
 #include "itkSimplexMeshGeometry.h"
 #include "itkConstNeighborhoodIterator.h"
+#include "itkCompositeTransform.h"
 
-#include "kmKNNProfileClassifier-FLANN.h"
+//#include "kmKNNProfileClassifier-FLANN.h"
 #include "kmVtkItkUtility.h"
 #include "kmGlobal.h"
 
@@ -227,6 +228,138 @@ namespace km
 		}
 
 		return paradiff;
+	}
+
+	template<class MatrixType, class RigidTransformType>
+	void FillRigidTransform(const MatrixType & mat, RigidTransformType * rigidTransform)
+	{
+		RigidTransformType::MatrixType rigidMatrix = rigidTransform->GetMatrix();
+		RigidTransformType::OffsetType rigidOffset = rigidTransform->GetOffset();
+
+		for (int i=0;i<3;i++)
+		{
+			for (int j=0;j<3;j++)
+			{
+				rigidMatrix[i][j] = mat(i, j);
+			}
+		}
+		//std::cout<<rigidMatrix<<std::endl;
+
+		for (int i=0;i<Dimension;i++)
+		{
+			rigidOffset[i] = mat(i, Dimension);
+		}
+		//std::cout<<rigidOffset<<std::endl;
+
+		rigidTransform->SetMatrix( rigidMatrix );
+		rigidTransform->SetOffset( rigidOffset );
+	}
+
+	template<class VectorType, class ShapeTransformType>
+	void FillShapeTransform(const VectorType & vec, ShapeTransformType * shapeTransform)
+	{
+		ShapeTransformType::ParametersType shapeParams = shapeTransform->GetParameters();
+		for (int i=0;i<shapeTransform->GetUsedNumberOfCoefficients();i++)
+		{
+			if (vec[i]<-3.0){
+				shapeParams[i] = -3;
+			}else if (vec[i]>3.0){
+				shapeParams[i] = 3;
+			}else{
+				shapeParams[i] = vec[i];	
+			}
+		}
+
+		shapeTransform->SetParameters(shapeParams);
+	}
+
+	template<class MatrixType, class MeshType>
+	void fillPointSetIntoMatrix(MatrixType& matrix, const MeshType * mesh)
+	{
+		typedef MeshType::PointType PointType;
+		typedef MeshType::PointIdentifier PointIdentifier;
+		typedef MeshType::PointsContainerConstIterator PointsContainerConstIterator;
+
+		PointsContainerConstIterator ptIt = mesh->GetPoints()->Begin();
+		PointsContainerConstIterator ptItEnd = mesh->GetPoints()->End();
+		while(ptIt != ptItEnd)
+		{
+			PointIdentifier idx = ptIt.Index();
+			PointType pt = ptIt.Value();
+			for (int d=0;d<Dimension;d++)
+			{
+				matrix(idx, d) = pt[d];
+			}
+			ptIt++;
+		}
+	}
+	
+	template<class MeshType, class StatisticalModelType, class RigidTransformType, class ShapeTransformType>
+	void
+		compositeTransformFitting( const MeshType* targetMesh, 
+								  const StatisticalModelType* model, 
+								  RigidTransformType * rigidTransform,
+								  ShapeTransformType * shapeTransform)
+	{
+		unsigned int Dimension = MeshType::PointType::PointDimension;
+
+		if (shapeTransform->GetUsedNumberOfCoefficients() > shapeTransform->GetNumberOfParameters())
+		{
+			shapeTransform->SetUsedNumberOfCoefficients(shapeTransform->GetNumberOfParameters());
+		}
+
+		MeshType::Pointer referenceShapeMesh = model->GetRepresenter()->GetReference();
+		MeshType::Pointer meanShapeMesh = model->DrawMean();
+		unsigned int numberOfLandmarks = referenceShapeMesh->GetNumberOfPoints();
+
+		typedef statismo::MatrixType StatismoMatrixType;
+		typedef statismo::VectorType StatismoVectorType;
+		typedef StatisticalModelType::VectorType VnlVectorType;
+
+		StatismoMatrixType matrixToBeFitted;
+		matrixToBeFitted.setConstant(numberOfLandmarks, Dimension+1, 1.0);
+
+		StatismoMatrixType matrixTargetForRigid;
+		matrixTargetForRigid.setConstant(numberOfLandmarks, Dimension+1, 1.0);
+
+		StatismoMatrixType matrixTargetForShape;
+		matrixTargetForShape.setConstant(numberOfLandmarks, Dimension+1, 1.0);
+
+		StatismoVectorType I = StatismoVectorType::Ones(matrixToBeFitted.cols());
+
+		unsigned int iterNum = 0;
+		while(iterNum < 1)
+		{
+			std::cout<<"*****************Fit rigid parameters " << iterNum << " ****************"<<std::endl;
+
+			MeshType::ConstPointer shapeFittedMesh = km::transformMesh<MeshType, ShapeTransformType>(referenceShapeMesh, shapeTransform);
+			MeshType::ConstPointer targetMeshForRigid = targetMesh;
+
+			fillPointSetIntoMatrix<StatismoMatrixType, MeshType>(matrixToBeFitted, shapeFittedMesh);
+			fillPointSetIntoMatrix<StatismoMatrixType, MeshType>(matrixTargetForRigid, targetMesh);
+
+			StatismoMatrixType Mmatrix = matrixToBeFitted.transpose() * matrixToBeFitted;
+			Mmatrix.diagonal() += I;
+
+			StatismoMatrixType MInverseMatrix = Mmatrix.inverse();
+
+			const StatismoMatrixType& WT = matrixToBeFitted.transpose();
+
+			StatismoMatrixType coeffsRigid = MInverseMatrix * (WT * matrixTargetForRigid);
+
+			FillRigidTransform<StatismoMatrixType, RigidTransformType>(coeffsRigid.transpose(), rigidTransform);
+
+			/*****************Fit shape parameters****************/
+			RigidTransformType::Pointer inversedRigidTransform = RigidTransformType::New();
+			rigidTransform->GetInverse( inversedRigidTransform );
+
+			MeshType::Pointer targetMeshForShape = km::transformMesh<MeshType, RigidTransformType>(targetMesh, inversedRigidTransform);
+			VnlVectorType coeffsShape = model->ComputeCoefficientsForDataset( targetMeshForShape );
+
+			FillShapeTransform<VnlVectorType, ShapeTransformType>(coeffsShape, shapeTransform);
+
+			iterNum++;
+		}
 	}
 }
 

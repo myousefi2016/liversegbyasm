@@ -17,9 +17,9 @@
 
 int main(int argc, char* argv[])
 {
-	if( argc < 6 )
+	if( argc < 5 )
 	{
-		std::cerr<<"Usage:   origDataList meshList referenceGeometry OutputDir [Profile Type: LIVER/BOUNDARY]"<<std::endl;
+		std::cerr<<"Usage:   origDataList meshList referenceGeometry OutputDir [Profile Type: INSIDE/BOUNDARY]"<<std::endl;
 		return EXIT_FAILURE;
 	}
 
@@ -27,21 +27,21 @@ int main(int argc, char* argv[])
 	const char* meshlistfile  = argv[2];
 	const char* referencegeometry = argv[3];
 	const char* outputdir = argv[4];
-	const char* categorystr = argv[5];
+	//const char* categorystr = argv[5];
 
-	PROFILE_CATEGORY category;
-	if (strcmp(categorystr,"BOUNDARY")==0)
-	{
-		category = BOUNDARY;
-	}
-	else if (strcmp(categorystr,"LIVER")==0)
-	{
-		category = LIVER;
-	}
-	else
-	{
-		category = DEFAULT;
-	}
+	//PROFILE_CATEGORY category;
+	//if (strcmp(categorystr,"BOUNDARY")==0)
+	//{
+	//	category = BOUNDARY;
+	//}
+	//else if (strcmp(categorystr,"INSIDE")==0)
+	//{
+	//	category = INSIDE;
+	//}
+	//else
+	//{
+	//	category = DEFAULT;
+	//}
 
 	itk::TimeProbesCollectorBase chronometer;
 	itk::MemoryProbesCollectorBase memorymeter;
@@ -50,11 +50,11 @@ int main(int argc, char* argv[])
 
 	//For liver tissue classification
 	int resultcode = km::trainAppearance(
-		origlistfile, 
-		meshlistfile,
-		referencegeometry,
-		outputdir,
-		category);
+		origlistfile 
+		,meshlistfile
+		,referencegeometry
+		,outputdir
+		/*,category*/);
 
 	if(resultcode==EXIT_SUCCESS)
 	{

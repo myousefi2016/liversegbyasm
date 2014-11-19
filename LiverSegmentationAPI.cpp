@@ -34,9 +34,7 @@ generateBestPointSet(
 						 const typename IntensityInterpolatorType* intensityInterpolator,
 						 typename MeshType* outputMesh,
 						 const typename MeshType* liverMesh,
-						 const typename MeshType* shapeMesh,
 						 const typename MeshType* varianceMap,
-						 const typename MeshType* errorMap,
 						 const double spacingDistForTest = 1.5,
 						 const int numberOfPointsForTest = 5)
 {
@@ -81,14 +79,7 @@ generateBestPointSet(
 				classifier_liver->profile_category);
 
 			double current_confidence = 2*classifier->classify( feature, idx ) - 1.0;
-			//if ( current_confidence > 0 )
-			//{
-			//	direction = 1.0;
-			//}
-			//else
-			//{
-			//	direction = -1.0; //By default search towards inside.
-			//}
+
 			direction = current_confidence;
 		}
 		if (classifier->profile_category == LIVER)
@@ -97,15 +88,8 @@ generateBestPointSet(
 			varianceMap->GetPointData(idx, &pointVariance);
 
 			double pointError = 0.0;
-			//errorMap->GetPointData(idx, &pointError);
-			//pointError = std::log( 3*pointError+1 );
 
 			int tmpNumberOfPointsForTest = numberOfPointsForTest;//static_cast<int>(numberOfPointsForTest*pointVariance+3.0);
-
-			//if (direction<0)
-			//{
-			//	tmpNumberOfPointsForTest = 0;
-			//}
 
 			std::vector<double> confidences_trace;
 			confidences_trace.push_back(current_confidence);
@@ -128,8 +112,6 @@ generateBestPointSet(
 						classifier->profile_category);
 
 					confidence = classifier->classify(feature,idx);
-					//let's bring in the error map.
-					confidence = (1.0-pointError)*confidence+pointError*(1.0-confidence);
 
 					confidence = 2*confidence - 1.0;
 				}
@@ -226,7 +208,7 @@ generateBestPointSet(
 		geoIt++;
 	}
 
-	if (classifier->profile_category = LIVER)
+	if (classifier->profile_category != BOUNDARY)
 	{
 		//Remove noise point.
 		km::smoothMeshData<MeshType>(outputMesh, 1);
@@ -262,8 +244,7 @@ void LiverSeg( km::Notifier* notifier,
 			  const char* geoFile,
 			  const char* atlasImageFile,
 			  const char* configFile,
-			  const char* varianceMapFile,
-			  const char* errorMapLiverFile)
+			  const char* varianceMapFile)
 {
 	if ( notifier == NULL )
 	{
@@ -313,11 +294,6 @@ void LiverSeg( km::Notifier* notifier,
 	if ( varianceMapFile == NULL )
 	{
 		std::cout<<"varianceMapFile is NULL!"<<std::endl;
-		return;
-	}
-	if ( errorMapLiverFile == NULL )
-	{
-		std::cout<<"errorMapLiverFile is NULL!"<<std::endl;
 		return;
 	}
 
@@ -549,10 +525,10 @@ void LiverSeg( km::Notifier* notifier,
 	//typedef itk::VersorRigid3DTransform<double> RigidTransformType;
 	//typedef itk::ScaleSkewVersor3DTransform<double> RigidTransformType;
 	//typedef itk::ScaleVersor3DTransform<double> RigidTransformType;
-	//typedef itk::AffineTransform<double, Dimension> RigidTransformType;
+	typedef itk::AffineTransform<double, Dimension> RigidTransformType;
 	//typedef itk::CenteredAffineTransform<double, Dimension> RigidTransformType;
 	//typedef itk::Rigid3DTransform< double > RigidTransformType;
-	typedef itk::Similarity3DTransform<double> RigidTransformType;
+	//typedef itk::Similarity3DTransform<double> RigidTransformType;
 
 	RigidTransformType::Pointer rigidTransform = RigidTransformType::New();
 	rigidTransform->SetIdentity();
@@ -591,17 +567,13 @@ void LiverSeg( km::Notifier* notifier,
 	{
 		opt_scales[p++] = 1.0;
 	}
-	for (int t=0;t<3;t++)
+	for (int t=0;t<9;t++)
 	{
 		opt_scales[p++] = 1.0;
 	}
 	for (int t=0;t<3;t++)
 	{
 		opt_scales[p++] = 1e-3;
-	}
-	for (int t=0;t<1;t++)
-	{
-		opt_scales[p++] = 1.0;
 	}
 
 	if(flag_fittingByDistMap)
@@ -637,6 +609,17 @@ void LiverSeg( km::Notifier* notifier,
 			opt_scales,
 			1500);
 
+		ShapeTransformType::ParametersType shapeParamPost = shapeTransform->GetParameters();
+		for (int ttt=0;ttt<shapeTransform->GetUsedNumberOfCoefficients();ttt++)
+		{
+			if (shapeParamPost[ttt]<-3.0){
+				shapeParamPost[ttt] = 0;
+			}else if (shapeParamPost[ttt]>3.0){
+				shapeParamPost[ttt] = 0;
+			}
+		}
+		shapeTransform->SetParameters( shapeParamPost );
+
 		std::cout<<compositeTransform->GetParameters()<<std::endl;
 
 		km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, deformedMesh, compositeTransform );
@@ -667,8 +650,8 @@ void LiverSeg( km::Notifier* notifier,
 
 		g_phase = TUMOR_DETECTION;
 		
-		km::detectLiverIntensityRangeIncludingTumor<ShortImageType, MeshType>( inputImage, deformedMesh, g_liverThresholds );
-		//km::detectLiverIntensityRangeWithoutTumor<ShortImageType, MeshType>( inputImage, deformedMesh, g_liverThresholds );
+		//km::detectLiverIntensityRangeIncludingTumor<ShortImageType, MeshType>( inputImage, deformedMesh, g_liverThresholds );
+		km::detectLiverIntensityRangeWithoutTumor<ShortImageType, MeshType>( inputImage, deformedMesh, g_liverThresholds );
 		KM_DEBUG_INFO( " Liver gray value range: " );
 		for(int i=0;i<g_liverThresholds.size();i++)
 		{
@@ -677,7 +660,6 @@ void LiverSeg( km::Notifier* notifier,
 		std::cout<<std::endl;
 	}
 
-	MeshType::Pointer errorMapLiver = km::readMesh<MeshType>(errorMapLiverFile);
 	MeshType::Pointer varianceMap = km::readMesh<MeshType>(varianceMapFile);
 
 	//TEST
@@ -715,15 +697,13 @@ void LiverSeg( km::Notifier* notifier,
 		deformableFilter->SetP2p(false);
 		deformableFilter->SetInput( deformedMesh );
 		deformableFilter->SetVarianceMap(varianceMap);
-		deformableFilter->SetIterations( 50 );
+		deformableFilter->SetIterations( 200 );
 
 		unsigned int maxIterations = 5;
 		double rigidParaDiffTollerance = 0.002;
 		double shapeParaDiffTollerance = 0.02;
 		unsigned int iter_ellapsed = 0;
 
-		bool fittingByComputing = false;
-		bool fittingByOptimizing = false;
 		bool flagLooping = true;
 
 		MeshType::Pointer shapeMesh = km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, compositeTransform );
@@ -741,103 +721,41 @@ void LiverSeg( km::Notifier* notifier,
 			std::cout<<"********************************iteration: "<<iter_ellapsed<<"************************************"<<std::endl;
 
 			generateBestPointSet<FloatImageType, MeshType, GradientInterpolatorType, IntensityInterpolatorType>
-				( &adaboostProfileClassifier_Liver, &adaboostProfileClassifier_Liver, gradientInterpolator, intensityInterpolator, bestMesh, deformedMesh, shapeMesh, varianceMap, errorMapLiver, 1.5, 8);
+				( &adaboostProfileClassifier_Liver, &adaboostProfileClassifier_Liver, gradientInterpolator, intensityInterpolator, bestMesh, shapeMesh, varianceMap, 1.5, 20);
 			
-			deformableFilter->SetBestMesh( bestMesh );
-			deformableFilter->SetShapeMesh( shapeMesh );
-			deformableFilter->Update();
+			//deformableFilter->SetBestMesh( bestMesh );
+			//deformableFilter->SetShapeMesh( shapeMesh );
+			//deformableFilter->Update();
 
-			if (fittingByOptimizing && !fittingByComputing)
+			//Store rigid parameters before fitting.
+			RigidTransformType::ParametersType rigidParamPre = rigidTransform->GetParameters();
+			//Store shape parameters before fitting.
+			ShapeTransformType::ParametersType shapeParamPre = shapeTransform->GetParameters();
+
+			km::compositeTransformFitting<MeshType, StatisticalModelType, RigidTransformType, ShapeTransformType>( bestMesh, model, rigidTransform, shapeTransform );
+
+			//Store rigid parameters before fitting.
+			RigidTransformType::ParametersType rigidParamPost = rigidTransform->GetParameters();
+			//Store shape parameters before fitting.
+			ShapeTransformType::ParametersType shapeParamPost = shapeTransform->GetParameters();
+
+			//Calculate shape parameters variance.
+			double shapeParamDiff = 0;
+			for (int p=0;p<shapeTransform->GetUsedNumberOfCoefficients();p++)
 			{
-				KM_DEBUG_INFO("Fitting model by optimizating.");
-				//Store rigid parameters before fitting.
-				RigidTransformType::ParametersType rigidParamPre = rigidTransform->GetParameters();
-				//Store shape parameters before fitting.
-				ShapeTransformType::ParametersType shapeParamPre = shapeTransform->GetParameters();
-
-				km::transformFitting<MeshType, CompositeTransformType>(
-					deformedMesh,
-					referenceShapeMesh,
-					compositeTransform,
-					shapeTransform->GetUsedNumberOfCoefficients(),
-					KdTree,
-					opt_scales,
-					200
-					);
-
-				//Store rigid parameters after fitting.
-				RigidTransformType::ParametersType rigidParamPost = rigidTransform->GetParameters();
-				//Store shape parameters after fitting.
-				ShapeTransformType::ParametersType shapeParamPost = shapeTransform->GetParameters();
-
-				for (int ttt=0;ttt<shapeTransform->GetUsedNumberOfCoefficients();ttt++)
-				{
-					if (shapeParamPost[ttt]<-3.0){
-						shapeParamPost[ttt] = -3.0;
-					}else if (shapeParamPost[ttt]>3.0){
-						shapeParamPost[ttt] = 3.0;
-					}
-				}
-
-				//Calculate shape parameters variance.
-				double rigidParamDiff = 0;
-				for (int p=0;p<rigidTransform->GetNumberOfParameters();p++)
-				{
-					rigidParamDiff += std::abs(rigidParamPost[p]-rigidParamPre[p])*(opt_scales[p+shapeTransform->GetNumberOfParameters()]);
-				}
-				rigidParamDiff /= rigidTransform->GetNumberOfParameters();
-				KM_DEBUG_PRINT("Rigid parameters difference", rigidParamDiff);
-				if (rigidParamDiff < rigidParaDiffTollerance)
-				{
-					KM_DEBUG_INFO( "Rigid parameters difference is smaller than tollerance. Switch to fitting by computing now.." );
-					fittingByComputing = true;
-				}
+				shapeParamDiff += std::abs(shapeParamPost[p]-shapeParamPre[p]);
 			}
-			else
+			shapeParamDiff /= shapeTransform->GetUsedNumberOfCoefficients();
+			KM_DEBUG_PRINT("SSM parameters difference", shapeParamDiff);
+			if (shapeParamDiff < shapeParaDiffTollerance && iter_ellapsed > 0)
 			{
-				RigidTransformType::Pointer inversedRigidTransform = RigidTransformType::New();
-				rigidTransform->GetInverse( inversedRigidTransform );
-				
-				MeshType::Pointer displacedShapeMesh = shapeMesh;
-				km::transformMesh<MeshType, RigidTransformType>( deformedMesh, displacedShapeMesh, inversedRigidTransform );
-
-				KM_DEBUG_INFO("Fitting model by computing.");
-				//Store shape parameters before fitting.
-				ShapeTransformType::ParametersType shapeParamPre = shapeTransform->GetParameters();
-				//Store shape parameters after fitting.
-				ShapeTransformType::ParametersType shapeParamPost = shapeTransform->GetParameters();
-
-				StatisticalModelType::VectorType coefficient = model->ComputeCoefficientsForDataset( displacedShapeMesh );
-				for (int ttt=0;ttt<shapeTransform->GetUsedNumberOfCoefficients();ttt++)
-				{
-					if (coefficient[ttt]<-3.0){
-						shapeParamPost[ttt] = -3.0;
-					}else if (coefficient[ttt]>3.0){
-						shapeParamPost[ttt] = 3.0;
-					}else{
-						shapeParamPost[ttt] = coefficient[ttt];
-					}
-				}
-				shapeTransform->SetParameters( shapeParamPost );
-
-				//Calculate shape parameters variance.
-				double shapeParamDiff = 0;
-				for (int p=0;p<shapeTransform->GetUsedNumberOfCoefficients();p++)
-				{
-					shapeParamDiff += std::abs(shapeParamPost[p]-shapeParamPre[p]);
-				}
-				shapeParamDiff /= shapeTransform->GetUsedNumberOfCoefficients();
-				KM_DEBUG_PRINT("SSM parameters difference", shapeParamDiff);
-				if (shapeParamDiff < shapeParaDiffTollerance && iter_ellapsed > 0)
-				{
-					KM_DEBUG_INFO( "SSM parameters difference is smaller than tollerance. Stop fitting now.." );
-					flagLooping = false;
-				}
-				else if (iter_ellapsed >= maxIterations)
-				{
-					KM_DEBUG_INFO( "Exceed maximum iteration number. Stop fitting now.." );
-					flagLooping = false;
-				}
+				KM_DEBUG_INFO( "SSM parameters difference is smaller than tollerance. Stop fitting now.." );
+				flagLooping = false;
+			}
+			else if (iter_ellapsed >= maxIterations)
+			{
+				KM_DEBUG_INFO( "Exceed maximum iteration number. Stop fitting now.." );
+				flagLooping = false;
 			}
 
 			std::cout<<"Rigid transform parameters: "<<rigidTransform->GetParameters()<<std::endl;
@@ -850,12 +768,14 @@ void LiverSeg( km::Notifier* notifier,
 			{
 				km::writeMesh<MeshType>( outputdir, "LIVER-shapeMesh-iter", iter_ellapsed, ".vtk", shapeMesh );
 				km::writeMesh<MeshType>( outputdir, "LIVER-bestMesh-iter", iter_ellapsed, ".vtk", bestMesh );
-				km::writeMesh<MeshType>( outputdir, "LIVER-deformedMesh-iter", iter_ellapsed, ".vtk", deformedMesh );
+				//km::writeMesh<MeshType>( outputdir, "LIVER-deformedMesh-iter", iter_ellapsed, ".vtk", deformedMesh );
 			}
 
 			iter_ellapsed++;
 		}
 	}
+
+	return;
 
 	if(flag_deformingBoundaryProfile)
 	{
@@ -910,7 +830,7 @@ void LiverSeg( km::Notifier* notifier,
 			std::cout<<"********************************iteration: "<<iter_ellapsed<<"************************************"<<std::endl;
 
 			generateBestPointSet<FloatImageType, MeshType, GradientInterpolatorType, IntensityInterpolatorType>
-				( &adaboostProfileClassifier_Boundary, &adaboostProfileClassifier_Liver, gradientInterpolator, intensityInterpolator, bestMesh, deformedMesh, shapeMesh, varianceMap, errorMapLiver, 1.5, 8);
+				( &adaboostProfileClassifier_Boundary, &adaboostProfileClassifier_Liver, gradientInterpolator, intensityInterpolator, bestMesh, deformedMesh, varianceMap, 1.5, 8);
 
 			deformableFilter->SetBestMesh( bestMesh );
 			deformableFilter->SetShapeMesh( shapeMesh );

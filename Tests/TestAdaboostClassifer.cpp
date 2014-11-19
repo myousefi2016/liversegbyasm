@@ -74,7 +74,7 @@ int main(int argc, char * argv[] )
 	memorymeter2.Start( "Adaboost_Testing" );
 	chronometer2.Start( "Adaboost_Testing" );
 
-	adaboostclassifier.test(knnclassifier, 0.5);
+	adaboostclassifier.test(knnclassifier);
 	
 	chronometer2.Stop( "Adaboost_Testing" );
 	memorymeter2.Stop( "Adaboost_Testing" );

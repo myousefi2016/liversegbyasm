@@ -76,7 +76,7 @@ add_executable(AdaSegment2 include/AdaSegment/AdaSegment2.cxx)
 target_link_libraries (AdaSegment2)
 
 #add_subdirectory(Tools)
-#add_subdirectory(Tests)
+add_subdirectory(Tests)
 add_subdirectory(Training)
 add_subdirectory(BuildingModel)
 add_subdirectory(ModelViewer)
