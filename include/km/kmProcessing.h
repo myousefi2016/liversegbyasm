@@ -44,6 +44,8 @@
 #include "itkOrImageFilter.h"
 
 #include "kmUtility.h"
+#include "kmGlobal.h"
+#include "kmRegistration.h"
 
 namespace km
 {
