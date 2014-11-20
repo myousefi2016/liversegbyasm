@@ -1,24 +1,50 @@
 #include <iostream>
 
 #include "LiverSegmentationAPI.h"
+#include "kmNotifierBase.h"
+#include "kmUtility.h"
 
 namespace km
 {
-	class NotifierImp:public Notifier
+	template<class TImage, class TPointSet>
+	class NotifierImp:public NotifierBase<TImage, TPointSet>
 	{
 	public:
-		void notifyMesh( MeshType* mesh )
+		char* outputdir;
+
+		NotifierImp():
 		{
-			//km::writeMesh<MeshType>( "tempMesh.vtk", mesh );
-			std::cout<<"tempMesh.vtk"<<std::endl;
+			outputdir = NULL;
 		}
 
-		void notifyImage( UCharImageType* image )
+		~NotifierImp()
 		{
-			//km::writeImage<UCharImageType>( "tempImage.nii.gz", image );
-			std::cout<<"tempImage.nii.gz"<<std::endl;
+
 		}
-		//virtual notifyFinish();
+
+		void notifyMesh( TPointSet* mesh, const char* filename )
+		{
+			if (outputdir != NULL)
+			{
+				km::writeMesh<TPointSet>(outputdir, filename, mesh);
+			}
+			else
+			{
+				km::writeMesh<TPointSet>(filename, mesh);
+			}
+		}
+
+		void notifyImage( TImage* image, const char* filename )
+		{
+			if (outputdir != NULL)
+			{
+				km::writeImage<TImage>(outputdir, filename, image);
+			}
+			else
+			{
+				km::writeImage<TImage>(filename, image);
+			}
+		}
 	};
 }
 
@@ -43,8 +69,6 @@ int main(int argc, char* argv[])
 		return -1;
 	}
 
-	NotifierImp* notifier = new NotifierImp;
-
 	int paramidx = 1;
 
 	const char* inputImageFile = argv[paramidx++];
@@ -68,6 +92,9 @@ int main(int argc, char* argv[])
 	std::cout<<"** atlas image                 : " << atlasImageFile << std::endl;
 	std::cout<<"** config file                 : " <<configFile<<std::endl;
 	std::cout<<"** variance map                : " <<varianceMapFile<<std::endl;
+
+	NotifierImp* notifier = new NotifierImp;
+	notifier->outputdir = outputdir;
 
 	LiverSeg( notifier,
 	          inputImageFile,

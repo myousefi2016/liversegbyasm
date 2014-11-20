@@ -378,6 +378,26 @@ namespace km
 		profileUnitBoundary.closeTxtSteam();
 		profileUnitCoordinate.closeTxtSteam();
 
+		//Output coordinate sample.
+		//Write profiles.
+		km::KNNProfileClassifier knnClassifierCoordinate;
+		knnClassifierCoordinate.setShapeNumber(numberOfData);
+		knnClassifierCoordinate.setShapePointsNumber(numberOfPoints);
+		knnClassifierCoordinate.loadSamples( profileUnitCoordinate.sampleTxtFilename );
+		knnClassifierCoordinate.cluster(11);
+		knnClassifierCoordinate.save( profileUnitCoordinate.sampleHd5Filename );
+		{
+			km::assigneMesh<SimplexMeshType>( reflivermesh, 0.0 );
+			for (int pid=0;pid<reflivermesh->GetNumberOfPoints();pid++)
+			{
+				reflivermesh->SetPointData( pid, knnClassifierCoordinate.cluster_labels[pid][0] );
+			}
+
+			std::stringstream ss;
+			ss << outputdir << "\\ClusteredMeshCoordinate.vtk";
+			km::writeMesh<SimplexMeshType>( ss.str().c_str(), reflivermesh );
+		}
+
 		//Output plain sample.
 		//Write profiles.
 		km::KNNProfileClassifier knnClassifierPlain;
@@ -420,26 +440,6 @@ namespace km
 
 			std::stringstream ss;
 			ss << outputdir << "\\ErrorMap.vtk";
-			km::writeMesh<SimplexMeshType>( ss.str().c_str(), reflivermesh );
-		}
-
-		//Output coordinate sample.
-		//Write profiles.
-		km::KNNProfileClassifier knnClassifierCoordinate;
-		knnClassifierCoordinate.setShapeNumber(numberOfData);
-		knnClassifierCoordinate.setShapePointsNumber(numberOfPoints);
-		knnClassifierCoordinate.loadSamples( profileUnitCoordinate.sampleTxtFilename );
-		knnClassifierCoordinate.cluster(11);
-		knnClassifierCoordinate.save( profileUnitCoordinate.sampleHd5Filename );
-		{
-			km::assigneMesh<SimplexMeshType>( reflivermesh, 0.0 );
-			for (int pid=0;pid<reflivermesh->GetNumberOfPoints();pid++)
-			{
-				reflivermesh->SetPointData( pid, knnClassifierCoordinate.cluster_labels[pid][0] );
-			}
-
-			std::stringstream ss;
-			ss << outputdir << "\\ClusteredMeshCoordinate.vtk";
 			km::writeMesh<SimplexMeshType>( ss.str().c_str(), reflivermesh );
 		}
 

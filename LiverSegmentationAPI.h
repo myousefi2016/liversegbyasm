@@ -2,6 +2,7 @@
 #define _LiverSegmentation_H
 
 #include <fstream>						// file I/O
+#include <map>
 
 #include <itkImage.h>
 #include <itkMesh.h>
@@ -43,6 +44,14 @@
 #include "itkDeformableSimplexMesh3DAdaboostClassifierForceFilter.h"
 
 #include "LiverSegmentationAPI_Export.h"
+#include "kmGlobal.h"
+#include "AdaSegmentAPI.h"
+#include "kmNotifierBase.h"
+#include "kmProfileClassifier.h"
+#include "kmUtility.h"
+#include "kmVtkItkUtility.h"
+#include "kmProcessing.h"
+#include "kmModelFitting.h"
 
 extern char* outputdir;
 
@@ -72,28 +81,24 @@ typedef RepresenterType::MeshType                             MeshType;
 
 typedef itk::Mesh<MeshPixelType, 3> TriangleMeshType;
 
-namespace km
-{
-	//template<class MeshType, class MaskType>
-	class LiverSegmentationAPI_EXPORT Notifier
-	{
-	public:
-		virtual void notifyMesh( MeshType* mesh );
-		virtual void notifyImage( UCharImageType* image );
-		//virtual notifyFinish();
-	};
-}
+typedef km::NotifierBase<UCharImageType, MeshType> NotifierType;
+
+bool WRITE_MIDDLE_RESULT = true;
+
+char* outputdir = NULL;
+
+using namespace km;
 
 LiverSegmentationAPI_EXPORT 
-void LiverSeg( km::Notifier* notifier,
-			   const char* inputImageFile,
-			   const char* SSMFile,
-			   const char* boundaryClassifierFile,
-			   const char* liverClassifierFile,
-			   const char* adaboostSegmentFile,
-			   const char* geoFile,
-			   const char* atlasImageFile,
-			   const char* configFile,
-			   const char* varianceMap);
+void LiverSeg( const NotifierType* notifier,
+			  const char* inputImageFile,
+			  const char* SSMFile,
+			  const char* boundaryClassifierFile,
+			  const char* liverClassifierFile,
+			  const char* adaboostSegmentFile,
+			  const char* geoFile,
+			  const char* atlasImageFile,
+			  const char* configFile,
+			  const char* varianceMap);
 	
 #endif //_LiverSegmentation_H
