@@ -111,13 +111,13 @@ namespace itk
  * \ingroup ITKRegistrationCommon
  */
 template <class TFixedImage, class TMovingImage>
-class ITK_EXPORT MattesMutualInformationImageToImageMetricWithProbability:
+class ITK_EXPORT MattesMutualInformationWithProbabilityImageToImageMetric:
   public ImageToImageMetric<TFixedImage, TMovingImage>
 {
 public:
 
   /** Standard class typedefs. */
-  typedef MattesMutualInformationImageToImageMetricWithProbability     Self;
+  typedef MattesMutualInformationWithProbabilityImageToImageMetric     Self;
   typedef ImageToImageMetric<TFixedImage, TMovingImage> Superclass;
   typedef SmartPointer<Self>                            Pointer;
   typedef SmartPointer<const Self>                      ConstPointer;
@@ -126,7 +126,7 @@ public:
   itkNewMacro(Self);
 
   /** Run-time type information (and related methods). */
-  itkTypeMacro(MattesMutualInformationImageToImageMetricWithProbability,
+  itkTypeMacro(MattesMutualInformationWithProbabilityImageToImageMetric,
                ImageToImageMetric);
 
   /** Types inherited from Superclass. */
@@ -267,14 +267,14 @@ public:
   void RemoveProbabilityImage();
 protected:
 
-  MattesMutualInformationImageToImageMetricWithProbability();
-  virtual ~MattesMutualInformationImageToImageMetricWithProbability();
+  MattesMutualInformationWithProbabilityImageToImageMetric();
+  virtual ~MattesMutualInformationWithProbabilityImageToImageMetric();
   void PrintSelf(std::ostream & os, Indent indent) const;
 
 private:
 
   // purposely not implemented
-  MattesMutualInformationImageToImageMetricWithProbability(const Self &);
+  MattesMutualInformationWithProbabilityImageToImageMetric(const Self &);
   // purposely not implemented
   void operator=(const Self &);
 
@@ -373,7 +373,7 @@ private:
 } // end namespace itk
 
 #ifndef ITK_MANUAL_INSTANTIATION
-#include "itkMattesMutualInformationImageToImageMetricWithProbability.hxx"
+#include "itkMattesMutualInformationWithProbabilityImageToImageMetric.hxx"
 #endif
 
 #endif

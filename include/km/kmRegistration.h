@@ -29,7 +29,7 @@
 #include "itkMultiResolutionImageRegistrationMethod.h"
 #include "itkMultiResolutionPyramidImageFilter.h"
 #include "itkMattesMutualInformationImageToImageMetric.h"
-#include "itkMattesMutualInformationImageToImageMetricWithProbability.h"
+#include "itkMattesMutualInformationWithProbabilityImageToImageMetric.h"
 #include "itkMeanSquaresImageToImageMetric.h"
 #include "itkBSplineTransformInitializer.h"
 
@@ -512,7 +512,7 @@ namespace km
 		typedef itk::MultiResolutionPyramidImageFilter<
 			ImageType,
 			ImageType >                                                 ImagePyramidType;
-		typedef itk::MattesMutualInformationImageToImageMetricWithProbability< 
+		typedef itk::MattesMutualInformationWithProbabilityImageToImageMetric< 
 			ImageType,
 			ImageType>                                                  MetricType;
 		typedef itk::LBFGSBOptimizer/*RegularStepGradientDescentOptimizer*/    OptimizerType;

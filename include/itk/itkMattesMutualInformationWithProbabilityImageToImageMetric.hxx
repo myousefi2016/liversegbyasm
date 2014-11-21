@@ -15,10 +15,10 @@
 *  limitations under the License.
 *
 *=========================================================================*/
-#ifndef __itkMattesMutualInformationImageToImageMetricWithProbability_hxx
-#define __itkMattesMutualInformationImageToImageMetricWithProbability_hxx
+#ifndef __itkMattesMutualInformationWithProbabilityImageToImageMetric_hxx
+#define __itkMattesMutualInformationWithProbabilityImageToImageMetric_hxx
 
-#include "itkMattesMutualInformationImageToImageMetricWithProbability.h"
+#include "itkMattesMutualInformationWithProbabilityImageToImageMetric.h"
 #include "itkImageRandomConstIteratorWithIndex.h"
 #include "itkImageRegionIterator.h"
 #include "itkImageIterator.h"
@@ -37,8 +37,8 @@ namespace itk
 	* Constructor
 	*/
 	template <class TFixedImage, class TMovingImage>
-	MattesMutualInformationImageToImageMetricWithProbability<TFixedImage, TMovingImage>
-		::MattesMutualInformationImageToImageMetricWithProbability() :
+	MattesMutualInformationWithProbabilityImageToImageMetric<TFixedImage, TMovingImage>
+		::MattesMutualInformationWithProbabilityImageToImageMetric() :
 	m_NumberOfHistogramBins(50),
 		m_MovingImageNormalizedMin(0.0),
 		m_FixedImageNormalizedMin(0.0),
@@ -80,14 +80,14 @@ namespace itk
 	}
 
 	template <class TFixedImage, class TMovingImage>
-	MattesMutualInformationImageToImageMetricWithProbability<TFixedImage, TMovingImage>
-		::~MattesMutualInformationImageToImageMetricWithProbability()
+	MattesMutualInformationWithProbabilityImageToImageMetric<TFixedImage, TMovingImage>
+		::~MattesMutualInformationWithProbabilityImageToImageMetric()
 	{
 	}
 
   template <class TFixedImage, class TMovingImage>
   void
-  MattesMutualInformationImageToImageMetricWithProbability<TFixedImage, TMovingImage>
+  MattesMutualInformationWithProbabilityImageToImageMetric<TFixedImage, TMovingImage>
     ::SetProbabilityImage( ProbabilityImagePointer pImage )
   {
     this->m_ProbabilityImage = pImage;
@@ -99,7 +99,7 @@ namespace itk
 
   template <class TFixedImage, class TMovingImage>
   void
-    MattesMutualInformationImageToImageMetricWithProbability<TFixedImage, TMovingImage>
+    MattesMutualInformationWithProbabilityImageToImageMetric<TFixedImage, TMovingImage>
     ::RemoveProbabilityImage(  )
   {
     this->m_ProbabilityImage = NULL;
@@ -113,7 +113,7 @@ namespace itk
 	*/
 	template <class TFixedImage, class TMovingImage>
 	void
-		MattesMutualInformationImageToImageMetricWithProbability<TFixedImage, TMovingImage>
+		MattesMutualInformationWithProbabilityImageToImageMetric<TFixedImage, TMovingImage>
 		::PrintSelf(std::ostream & os, Indent indent) const
 	{
 		Superclass::PrintSelf(os, indent);
@@ -155,7 +155,7 @@ namespace itk
 	*/
 	template <class TFixedImage, class TMovingImage>
 	void
-		MattesMutualInformationImageToImageMetricWithProbability<TFixedImage, TMovingImage>
+		MattesMutualInformationWithProbabilityImageToImageMetric<TFixedImage, TMovingImage>
 		::Initialize(void)
 		throw ( ExceptionObject )
 	{
@@ -405,7 +405,7 @@ namespace itk
 	*/
 	template <class TFixedImage, class TMovingImage>
 	void
-		MattesMutualInformationImageToImageMetricWithProbability<TFixedImage, TMovingImage>
+		MattesMutualInformationWithProbabilityImageToImageMetric<TFixedImage, TMovingImage>
 		::ComputeFixedImageParzenWindowIndices( FixedImageSampleContainer & samples)
 	{
 		const typename FixedImageSampleContainer::const_iterator end = samples.end();
@@ -439,7 +439,7 @@ namespace itk
 
 	template <class TFixedImage, class TMovingImage>
 	inline void
-		MattesMutualInformationImageToImageMetricWithProbability<TFixedImage, TMovingImage>
+		MattesMutualInformationWithProbabilityImageToImageMetric<TFixedImage, TMovingImage>
 		::GetValueThreadPreProcess(ThreadIdType threadID,
 		bool withinSampleThread) const
 	{
@@ -453,7 +453,7 @@ namespace itk
 
 	template <class TFixedImage, class TMovingImage>
 	inline bool
-		MattesMutualInformationImageToImageMetricWithProbability<TFixedImage, TMovingImage>
+		MattesMutualInformationWithProbabilityImageToImageMetric<TFixedImage, TMovingImage>
 		::GetValueThreadProcessSample(ThreadIdType threadID,
 		SizeValueType fixedImageSample,
 		const MovingImagePointType & itkNotUsed(mappedPoint),
@@ -522,7 +522,7 @@ namespace itk
 
 	template <class TFixedImage, class TMovingImage>
 	inline void
-		MattesMutualInformationImageToImageMetricWithProbability<TFixedImage, TMovingImage>
+		MattesMutualInformationWithProbabilityImageToImageMetric<TFixedImage, TMovingImage>
 		::GetValueThreadPostProcess( ThreadIdType threadID,
 		bool itkNotUsed(withinSampleThread) ) const
 	{
@@ -560,9 +560,9 @@ namespace itk
 	}
 
 	template <class TFixedImage, class TMovingImage>
-	typename MattesMutualInformationImageToImageMetricWithProbability<TFixedImage, TMovingImage>
+	typename MattesMutualInformationWithProbabilityImageToImageMetric<TFixedImage, TMovingImage>
 		::MeasureType
-		MattesMutualInformationImageToImageMetricWithProbability<TFixedImage, TMovingImage>
+		MattesMutualInformationWithProbabilityImageToImageMetric<TFixedImage, TMovingImage>
 		::GetValue(const ParametersType & parameters) const
 	{
 		// Set up the parameters in the transform
@@ -663,7 +663,7 @@ namespace itk
 
 	template <class TFixedImage, class TMovingImage>
 	inline void
-		MattesMutualInformationImageToImageMetricWithProbability<TFixedImage, TMovingImage>
+		MattesMutualInformationWithProbabilityImageToImageMetric<TFixedImage, TMovingImage>
 		::GetValueAndDerivativeThreadPreProcess( ThreadIdType threadID,
 		bool itkNotUsed(withinSampleThread) ) const
 	{
@@ -679,7 +679,7 @@ namespace itk
 
 	template <class TFixedImage, class TMovingImage>
 	inline bool
-		MattesMutualInformationImageToImageMetricWithProbability<TFixedImage, TMovingImage>
+		MattesMutualInformationWithProbabilityImageToImageMetric<TFixedImage, TMovingImage>
 		::GetValueAndDerivativeThreadProcessSample(ThreadIdType threadID,
 		SizeValueType fixedImageSample,
 		const MovingImagePointType & mappedPoint,
@@ -797,7 +797,7 @@ namespace itk
 
 	template <class TFixedImage, class TMovingImage>
 	inline void
-		MattesMutualInformationImageToImageMetricWithProbability<TFixedImage, TMovingImage>
+		MattesMutualInformationWithProbabilityImageToImageMetric<TFixedImage, TMovingImage>
 		::GetValueAndDerivativeThreadPostProcess(ThreadIdType threadID,
 		bool withinSampleThread) const
 	{
@@ -845,7 +845,7 @@ namespace itk
 	*/
 	template <class TFixedImage, class TMovingImage>
 	void
-		MattesMutualInformationImageToImageMetricWithProbability<TFixedImage, TMovingImage>
+		MattesMutualInformationWithProbabilityImageToImageMetric<TFixedImage, TMovingImage>
 		::GetValueAndDerivative(const ParametersType & parameters,
 		MeasureType & value,
 		DerivativeType & derivative) const
@@ -1014,7 +1014,7 @@ namespace itk
 	*/
 	template <class TFixedImage, class TMovingImage>
 	void
-		MattesMutualInformationImageToImageMetricWithProbability<TFixedImage, TMovingImage>
+		MattesMutualInformationWithProbabilityImageToImageMetric<TFixedImage, TMovingImage>
 		::GetDerivative(const ParametersType & parameters,
 		DerivativeType & derivative) const
 	{
@@ -1029,7 +1029,7 @@ namespace itk
 	*/
 	template <class TFixedImage, class TMovingImage>
 	void
-		MattesMutualInformationImageToImageMetricWithProbability<TFixedImage, TMovingImage>
+		MattesMutualInformationWithProbabilityImageToImageMetric<TFixedImage, TMovingImage>
 		::ComputePDFDerivatives(ThreadIdType threadID,
 		unsigned int sampleNumber,
 		int pdfMovingIndex,
@@ -1182,7 +1182,7 @@ namespace itk
 	*/
 	template <class TFixedImage, class TMovingImage>
 	void
-		MattesMutualInformationImageToImageMetricWithProbability<TFixedImage, TMovingImage>
+		MattesMutualInformationWithProbabilityImageToImageMetric<TFixedImage, TMovingImage>
 		::ComputePDFDerivatives(ThreadIdType threadID,
 		unsigned int sampleNumber,
 		int pdfMovingIndex,

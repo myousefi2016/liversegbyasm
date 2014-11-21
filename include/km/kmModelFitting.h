@@ -29,7 +29,9 @@
 #include "itkConstNeighborhoodIterator.h"
 #include "itkCompositeTransform.h"
 
+#include "kmProfileClassifier.h"
 #include "kmGlobal.h"
+#include "kmUtility.h"
 
 using namespace km;
 
@@ -75,7 +77,7 @@ namespace km
 	template<class FloatImageType, class MeshType, class GradientInterpolatorType, class IntensityInterpolatorType>
 	void
 		generateBestPointSet(
-		km::AdaboostProfileClassifier * classifier,
+		km::ProfileClassifier * classifier,
 		const typename GradientInterpolatorType* gradientInterpolator, 
 		const typename IntensityInterpolatorType* intensityInterpolator,
 		typename MeshType* outputMesh,

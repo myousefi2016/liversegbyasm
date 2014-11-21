@@ -45,8 +45,8 @@ int main(int argc, char * argv[] )
 	KNNProfileClassifierType knnclassifier;
 	knnclassifier.load( samplefile );
 	
-	typedef AdaboostProfileClassifier AdaboostProfileClassifierType;
-	AdaboostProfileClassifierType adaboostclassifier(category);
+	typedef ProfileClassifier ProfileClassifierType;
+	ProfileClassifierType adaboostclassifier(category);
 
 	std::cout<<adaboostclassifier.profile_category<<std::endl;
 

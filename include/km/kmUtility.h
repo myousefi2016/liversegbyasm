@@ -1,5 +1,5 @@
-#ifndef __kmUtility_h
-#define __kmUtility_h
+#ifndef __KM_UTILITY_H
+#define __KM_UTILITY_H
 
 /*********************************************************/
 /*********************************************************/
@@ -22,8 +22,6 @@
 	typedef typename T::SpacingType SpacingType;     \
 	typedef typename T::RegionType RegionType;       \
 	typedef typename T::DirectionType DirectionType; \
-
-//#define kmStaticMeshMacro(T)  typedef typename T::Pointer MeshPointer;   
 
 #define KM_DEBUG_ERROR(X) std::cout<<"[DEBUG ERROR]"<<(X)<<std::endl;
 #define KM_DEBUG_INFO(X) std::cout<<"[DEBUG INFO] "<<(X)<<std::endl;

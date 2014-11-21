@@ -25,11 +25,10 @@
 *  please refer to the NOTICE file at the top of the ITK source tree.
 *
 *=========================================================================*/
-#ifndef __itkDeformableSimplexMesh3DKNNClassifierForceFilter_h
-#define __itkDeformableSimplexMesh3DKNNClassifierForceFilter_h
+#ifndef __itkDeformableSimplexMesh3DWithShapePriorFilter_h
+#define __itkDeformableSimplexMesh3DWithShapePriorFilter_h
 
-//#include "itkDeformableSimplexMesh3DFilter.h"
-#include "itkDeformableSimplexMesh3DFilterWithAdaptedConfidence.h"
+#include "itkDeformableSimplexMesh3DFilter.h"
 #include "itkMesh.h"
 #include "itkConstNeighborhoodIterator.h"
 #include "itkCovariantVector.h"
@@ -37,15 +36,15 @@
 #include "itkListSample.h"
 #include "itkKdTreeGenerator.h"
 #include "itkWeightedCentroidKdTreeGenerator.h"
-
-#include "kmKNNProfileClassifier-FLANN.h"
+#include "itkGradientRecursiveGaussianImageFilter.h"
+#include "itkDifferenceOfGaussiansGradientImageFilter.h"
 
 #include <set>
 #include <map>
 
 namespace itk
 {
-	/** \class DeformableSimplexMesh3DKNNClassifierForceFilter
+	/** \class DeformableSimplexMesh3DWithShapePriorFilter
 	* \brief
 	* Additional to its superclass this model adds an balloon force component to the
 	* internal forces.
@@ -56,16 +55,16 @@ namespace itk
 	*
 	* \ingroup ITKDeformableMesh
 	*/
-	template< class TInputMesh, class TOutputMesh, class TKNNClassifier >
-	class ITK_EXPORT DeformableSimplexMesh3DKNNClassifierForceFilter
-		:public DeformableSimplexMesh3DFilterWithAdaptedConfidence< TInputMesh, TOutputMesh >
+	template< class TInputMesh, class TOutputMesh>
+	class ITK_EXPORT DeformableSimplexMesh3DWithShapePriorFilter
+		:public DeformableSimplexMesh3DFilter< TInputMesh, TOutputMesh >
 	{
 	public:
 		/** Standard "Self" typedef. */
-		typedef DeformableSimplexMesh3DKNNClassifierForceFilter Self;
+		typedef DeformableSimplexMesh3DWithShapePriorFilter Self;
 
 		/** Standard "Superclass" typedef. */
-		typedef DeformableSimplexMesh3DFilterWithAdaptedConfidence< TInputMesh, TOutputMesh > Superclass;
+		typedef DeformableSimplexMesh3DFilter< TInputMesh, TOutputMesh > Superclass;
 
 		/** Smart pointer typedef support */
 		typedef SmartPointer< Self >       Pointer;
@@ -75,7 +74,7 @@ namespace itk
 		itkNewMacro(Self);
 
 		/** Run-time type information (and related methods). */
-		itkTypeMacro(DeformableSimplexMesh3DKNNClassifierForceFilter, DeformableSimplexMesh3DFilterWithAdaptedConfidence);
+		itkTypeMacro(DeformableSimplexMesh3DWithShapePriorFilter, DeformableSimplexMesh3DFilter);
 
 		/** Some typedefs. */
 		typedef TInputMesh                                  InputMeshType;
@@ -85,14 +84,12 @@ namespace itk
 		typedef typename Superclass::GradientIndexValueType GradientIndexValueType;
 		typedef typename Superclass::GradientPixelType      GradientPixelType;
 
-		typedef itk::Image<float, GradientImageType::ImageDimension> IntensityImageType;
-		typedef typename IntensityImageType::Pointer                 IntensityImagePointer;
-		typedef itk::LinearInterpolateImageFunction<IntensityImageType, double> IntensityInterpolatorType;
-		typedef typename IntensityInterpolatorType::Pointer                     IntensityInterpolatorPointer;
-
 		/* Mesh pointer definition. */
 		typedef typename InputMeshType::Pointer  InputMeshPointer;
 		typedef typename OutputMeshType::Pointer OutputMeshPointer;
+
+		typedef typename InputMeshType::PointDataContainer             InputPointDataContainer;
+		typedef typename InputMeshType::PointDataContainerIterator     InputPointDataContainerIterator;
 
 		typedef typename Statistics::ListSample<PointType>                       SampleType;
 		typedef typename Statistics::WeightedCentroidKdTreeGenerator<SampleType> TreeGeneratorType;
@@ -101,69 +98,56 @@ namespace itk
 
 		typedef typename InputMeshType::PixelType PixelType;
 
-		typedef SimplexMeshGeometry::CovariantVectorType                       NormalVectorType;
+		typedef SimplexMeshGeometry::CovariantVectorType NormalVectorType;
 
-		typedef typename TKNNClassifier KNNProfileClassifierType;
-		typedef km::Profile<PROFILE_DIM> ProfileType;
-
-		itkStaticConstMacro(Dimension,   unsigned int, InputMeshType::PointDimension);
+		itkStaticConstMacro(Dimension, unsigned int, InputMeshType::PointDimension);
 
 		itkSetMacro(Kappa, double);
 		itkGetConstMacro(Kappa, double);
 
-		virtual void Initialize();
-
-		void SetItensityClassifier(  KNNProfileClassifierType * classifier )
-		{ 
-			m_IntensityClassifier = classifier; 
-		}
-
-		void SetGradientClassifier(  KNNProfileClassifierType * classifier )
-		{ 
-			m_GradientClassifier = classifier; 
-		}
-
-		void SetIntensity( IntensityImageType* intensityImage )
+		void SetTargetMesh( InputMeshType* TargetMesh )
 		{
-			m_IntensityImage = intensityImage;
+			m_TargetMesh = TargetMesh;
 		}
 
-		IntensityInterpolatorPointer GetIntensity()
+		void SetShapeMesh( InputMeshType* shapeMesh )
 		{
-			return m_IntensityInterpolator;
+			m_ShapeMesh = shapeMesh;
+		}
+		
+		void SetVarianceMap(InputMeshType* varianceMap)
+		{
+			this->m_VarianceMap = varianceMap;
 		}
 
-		void SetEdgeGradientImage( GradientImageType * edgeGradientImage )
+		void SetP2p(bool flag)
 		{
-			m_EdgeGradientImage = edgeGradientImage;	
-		}
-
-		GradientImagePointer GetEdgeGradientImage()
-		{
-			return m_EdgeGradientImage;
-		}
-
-		void SetInnerMesh( InputMeshType* innerMesh/*, InputMeshType* outerMesh*/ )
-		{
-			m_InnerMesh = innerMesh;
-			//m_OuterMesh = outerMesh;
+			m_P2p = flag;
 		}
 
 	protected:
-		DeformableSimplexMesh3DKNNClassifierForceFilter();
-		~DeformableSimplexMesh3DKNNClassifierForceFilter();
-		DeformableSimplexMesh3DKNNClassifierForceFilter(const Self &)
+		DeformableSimplexMesh3DWithShapePriorFilter();
+		~DeformableSimplexMesh3DWithShapePriorFilter();
+		DeformableSimplexMesh3DWithShapePriorFilter(const Self &)
 		{}
 
 		void operator=(const Self &)
 		{}
 
 		void PrintSelf(std::ostream & os, Indent indent) const;
+		
+		virtual void Initialize();
+		
+		virtual void ComputeDisplacement();
+		
+		virtual void GenerateData();
+		
+		virtual void Intervene( );
 
 		/**
 		* Compute the external force component
 		*/
-		virtual void ComputeExternalForce(SimplexMeshGeometry *data, const GradientImageType *gradient, unsigned int idx, double & confidence);
+		virtual void ComputeExternalForce(SimplexMeshGeometry *data, unsigned int indx);
 
 		/** Parameters definitions. */
 
@@ -171,31 +155,23 @@ namespace itk
 		* scalar for balloon force
 		*/
 		double m_Kappa;
+		
+		InputMeshPointer m_VarianceMap;
 
-		//GradientInterpolatorPointer m_GradientInterpolator;
+		InputMeshPointer m_TargetMesh;
+		typename SampleType::Pointer m_TargetSamplePoints;
+		typename TreeGeneratorType::Pointer m_TargetKdTreeGenerator;
 
-		KNNProfileClassifierType * m_IntensityClassifier;
-		KNNProfileClassifierType * m_GradientClassifier;
+		InputMeshPointer m_ShapeMesh;
+		typename SampleType::Pointer m_ShapeSamplePoints;
+		typename TreeGeneratorType::Pointer m_ShapeKdTreeGenerator;
 
-		IntensityImagePointer m_IntensityImage;
-		IntensityInterpolatorPointer m_IntensityInterpolator;
-
-		GradientImagePointer m_EdgeGradientImage;
-		GradientInterpolatorPointer m_EdgeGradientInterpolator;
-
-		InputMeshPointer m_InnerMesh;
-		//InputMeshPointer m_OuterMesh;
-
-		typename TreeGeneratorType::Pointer      m_InnerKdTreeGenerator;
-		typename SampleType::Pointer             m_InnerSamplePoints;
-
-		//typename TreeGeneratorType::Pointer      m_OuterKdTreeGenerator;
-		//typename SampleType::Pointer             m_OuterSamplePoints;
+		bool m_P2p;
 	}; // end of class
 } // end namespace itk
 
 #ifndef ITK_MANUAL_INSTANTIATION
-#include "itkDeformableSimplexMesh3DKNNClassifierForceFilter.hxx"
+#include "itkDeformableSimplexMesh3DWithShapePriorFilter.hxx"
 #endif
 
-#endif //__itkDeformableSimplexMesh3DKNNClassifierForceFilter_H
+#endif //__itkDeformableSimplexMesh3DWithShapePriorFilter_H

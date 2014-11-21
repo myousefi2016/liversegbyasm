@@ -41,64 +41,56 @@
 #include "itkKdTreeGenerator.h"
 #include "itkWeightedCentroidKdTreeGenerator.h"
 
-#include "itkDeformableSimplexMesh3DAdaboostClassifierForceFilter.h"
+#include "itkDeformableSimplexMesh3DWithShapePriorFilter.h"
 
 #include "LiverSegmentationAPI_Export.h"
-#include "kmGlobal.h"
-#include "AdaSegmentAPI.h"
 #include "kmNotifierBase.h"
-#include "kmProfileClassifier.h"
-#include "kmUtility.h"
-#include "kmVtkItkUtility.h"
-#include "kmProcessing.h"
-#include "kmModelFitting.h"
 
-extern char* outputdir;
+namespace km
+{
+	const unsigned int Dimension = 3;
+	typedef itk::Image<float, Dimension> ShortImageType;
+	typedef itk::Image<unsigned char, Dimension> UCharImageType;
+	typedef itk::Image<float, Dimension> FloatImageType;
+	typedef itk::CovariantVector<double, Dimension> GradientVectorType;
+	typedef itk::Image<GradientVectorType, Dimension> GradientImageType;
 
-const unsigned int Dimension = 3;
-typedef itk::Image<float, Dimension> ShortImageType;
-typedef itk::Image<unsigned char, Dimension> UCharImageType;
-typedef itk::Image<float, Dimension> FloatImageType;
-typedef itk::CovariantVector<double, Dimension> GradientVectorType;
-typedef itk::Image<GradientVectorType, Dimension> GradientImageType;
+	typedef itk::LinearInterpolateImageFunction<ShortImageType, double> ShortInterpolatorType;
+	typedef itk::LinearInterpolateImageFunction<FloatImageType, double> FloatInterpolatorType;
+	typedef itk::LinearInterpolateImageFunction<GradientImageType, double> GradientInterpolatorType;
 
-typedef itk::LinearInterpolateImageFunction<ShortImageType, double> ShortInterpolatorType;
-typedef itk::LinearInterpolateImageFunction<FloatImageType, double> FloatInterpolatorType;
-typedef itk::LinearInterpolateImageFunction<GradientImageType, double> GradientInterpolatorType;
+	typedef ShortImageType::PixelType PixelType;         
+	typedef ShortImageType::IndexType IndexType;         
+	typedef ShortImageType::PointType PointType;         
+	typedef ShortImageType::SizeType  SizeType;          
+	typedef ShortImageType::SpacingType SpacingType;     
+	typedef ShortImageType::RegionType RegionType;       
+	typedef ShortImageType::DirectionType DirectionType;
 
-typedef ShortImageType::PixelType PixelType;         
-typedef ShortImageType::IndexType IndexType;         
-typedef ShortImageType::PointType PointType;         
-typedef ShortImageType::SizeType  SizeType;          
-typedef ShortImageType::SpacingType SpacingType;     
-typedef ShortImageType::RegionType RegionType;       
-typedef ShortImageType::DirectionType DirectionType;
+	typedef double MeshPixelType;
+	typedef itk::SimplexMeshRepresenter<MeshPixelType, Dimension> RepresenterType;
+	typedef itk::StatisticalModel<RepresenterType>                StatisticalModelType;
+	typedef RepresenterType::MeshType                             MeshType;
 
-typedef double MeshPixelType;
-typedef itk::SimplexMeshRepresenter<MeshPixelType, Dimension> RepresenterType;
-typedef itk::StatisticalModel<RepresenterType>                StatisticalModelType;
-typedef RepresenterType::MeshType                             MeshType;
+	typedef itk::Mesh<MeshPixelType, 3> TriangleMeshType;
 
-typedef itk::Mesh<MeshPixelType, 3> TriangleMeshType;
+	typedef km::NotifierBase<MeshType> NotifierType;
 
-typedef km::NotifierBase<UCharImageType, MeshType> NotifierType;
+	LiverSegmentationAPI_EXPORT 
+		void LiverSeg( 
+		UCharImageType * segmentationResult,
+		NotifierType* notifier,
+		const char* outputdir,
+		const char* inputImageFile,
+		const char* SSMFile,
+		const char* boundaryClassifierFile,
+		const char* liverClassifierFile,
+		const char* adaboostSegmentFile,
+		const char* geoFile,
+		const char* atlasImageFile,
+		const char* configFile,
+		const char* varianceMap);
 
-bool WRITE_MIDDLE_RESULT = true;
+}
 
-char* outputdir = NULL;
-
-using namespace km;
-
-LiverSegmentationAPI_EXPORT 
-void LiverSeg( const NotifierType* notifier,
-			  const char* inputImageFile,
-			  const char* SSMFile,
-			  const char* boundaryClassifierFile,
-			  const char* liverClassifierFile,
-			  const char* adaboostSegmentFile,
-			  const char* geoFile,
-			  const char* atlasImageFile,
-			  const char* configFile,
-			  const char* varianceMap);
-	
 #endif //_LiverSegmentation_H

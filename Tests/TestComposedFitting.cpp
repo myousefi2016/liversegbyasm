@@ -7,8 +7,8 @@
 #include "itkSimilarity3DTransform.h"
 #include "itkAffineTransform.h"
 
-#include "kmUtility.h"
 #include "kmModelFitting.h"
+#include "kmUtility.h"
 
 const unsigned int Dimension = 3;
 typedef double MeshPixelType;

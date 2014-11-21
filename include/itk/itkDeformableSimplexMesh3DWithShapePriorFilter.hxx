@@ -25,102 +25,58 @@
 *  please refer to the NOTICE file at the top of the ITK source tree.
 *
 *=========================================================================*/
-#ifndef __itkDeformableSimplexMesh3DFilterWithAdaptedConfidence_hxx
-#define __itkDeformableSimplexMesh3DFilterWithAdaptedConfidence_hxx
+#ifndef __itkDeformableSimplexMesh3DWithShapePriorFilter_hxx
+#define __itkDeformableSimplexMesh3DWithShapePriorFilter_hxx
 
-#include "itkDeformableSimplexMesh3DFilterWithAdaptedConfidence.h"
+#include "itkDeformableSimplexMesh3DWithShapePriorFilter.h"
 #include "itkNumericTraits.h"
 
 #include <set>
-#include <math.h>
-
-#include "vxl_version.h"
-#if VXL_VERSION_DATE_FULL > 20040406
-#include "vnl/vnl_cross.h"
-#define itk_cross_3d vnl_cross_3d
-#else
-#define itk_cross_3d cross_3d
-#endif
 
 namespace itk
 {
 	/* Constructor. */
-	template< typename TInputMesh, typename TOutputMesh >
-	DeformableSimplexMesh3DFilterWithAdaptedConfidence< TInputMesh, TOutputMesh >
-		::DeformableSimplexMesh3DFilterWithAdaptedConfidence()
-	{
-		error_count = 0;
-		m_ConfidenceThreshold = 0.8;
+	template< typename TInputMesh, typename TOutputMesh>
+	DeformableSimplexMesh3DWithShapePriorFilter< TInputMesh, TOutputMesh>
+		::DeformableSimplexMesh3DWithShapePriorFilter()
 
-		m_GradientInterpolator = GradientInterpolatorType::New();
+	{
+		m_Kappa = 0.1;
+
+		m_TargetMesh = NULL;
+		m_TargetSamplePoints = NULL;
+		m_TargetKdTreeGenerator = NULL;
+
+		m_ShapeMesh = NULL;
+		m_ShapeSamplePoints = NULL;
+		m_ShapeKdTreeGenerator = NULL;
+		
 		m_VarianceMap = NULL;
 	}
 
-	template< typename TInputMesh, typename TOutputMesh >
-	DeformableSimplexMesh3DFilterWithAdaptedConfidence< TInputMesh, TOutputMesh >
-		::~DeformableSimplexMesh3DFilterWithAdaptedConfidence()
+	template< typename TInputMesh, typename TOutputMesh>
+	DeformableSimplexMesh3DWithShapePriorFilter< TInputMesh, TOutputMesh>
+		::~DeformableSimplexMesh3DWithShapePriorFilter()
 	{}
 
 	/* PrintSelf. */
-	template< typename TInputMesh, typename TOutputMesh >
+	template< typename TInputMesh, typename TOutputMesh>
 	void
-		DeformableSimplexMesh3DFilterWithAdaptedConfidence< TInputMesh, TOutputMesh >
+		DeformableSimplexMesh3DWithShapePriorFilter< TInputMesh, TOutputMesh>
 		::PrintSelf(std::ostream & os, Indent indent) const
 	{
 		Superclass::PrintSelf(os, indent);
-		os << indent << "Alpha = " << this->GetAlpha() << std::endl;
-		os << indent << "Beta = " << this->GetBeta() << std::endl;
-		os << indent << "Gamma = " << this->GetGamma() << std::endl;
-		os << indent << "Rigidity = " << this->GetRigidity() << std::endl;
-		os << indent << "ConfidenceThreshold = " << this->GetConfidenceThreshold() << std::endl;
-		os << indent << "Iterations = " << this->GetIterations() << std::endl;
-		os << indent << "Step = " << this->GetStep() << std::endl;
-		os << indent << "ImageDepth = " << this->GetImageDepth() << std::endl;
-
-		const GradientImageType * gradientImage = this->GetGradient();
-
-		if ( gradientImage )
-		{
-			os << indent << "Gradient = " << gradientImage << std::endl;
-		}
-		else
-		{
-			os << indent << "Gradient = " << "(None)" << std::endl;
-		}
-		os << indent << "ImageHeight = " << this->GetImageHeight() << std::endl;
-		os << indent << "ImageWidth = " << this->GetImageWidth() << std::endl;
-		os << indent << "Damping = " << this->GetDamping() << std::endl;
-		if ( this->m_Data.IsNotNull() )
-		{
-			os << indent << "Data = " << this->GetData() << std::endl;
-		}
-		else
-		{
-			os << indent << "Data = " << "(None)" << std::endl;
-		}
+		os << indent << "Kappa = " << m_Kappa << std::endl;
 	} /* End PrintSelf. */
-
-	template< typename TInputMesh, typename TOutputMesh >
+	
+	template< typename TInputMesh, typename TOutputMesh>
 	void
-		DeformableSimplexMesh3DFilterWithAdaptedConfidence< TInputMesh, TOutputMesh >
+		DeformableSimplexMesh3DWithShapePriorFilter< TInputMesh, TOutputMesh>
 		::Initialize()
 	{
-		//Superclass::Initialize();
-
-		std::cout<<"DeformableSimplexMesh3DFilterWithAdaptedConfidence::Initialize()..."<<std::endl;
-
 		const InputMeshType *             inputMesh = this->GetInput(0);
 		const InputPointsContainer *      points    = inputMesh->GetPoints();
 		InputPointsContainerConstIterator pointItr  = points->Begin();
-
-		const GradientImageType * gradientImage = this->GetGradient();
-
-		if ( gradientImage )
-		{
-			GradientImageSizeType imageSize = gradientImage->GetBufferedRegion().GetSize();
-
-			m_GradientInterpolator->SetInputImage( gradientImage );
-		}
 
 		this->m_Data = inputMesh->GetGeometryData();
 		if ( this->m_Data.IsNull() || this->m_Data->Size()==0)
@@ -182,12 +138,55 @@ namespace itk
 			}
 		}
 
-		std::cout<<"DeformableSimplexMesh3DFilterWithAdaptedConfidence::Initialize() end..."<<std::endl;
-	}
+		const GradientImageType* gradimg = this->GetGradient();
+		if (!gradimg)
+		{
+			std::cerr<<"Error! No gradient image!"<<std::endl;
+			return;
+		}
 
+		if (m_TargetMesh)
+		{
+			m_TargetSamplePoints = SampleType::New();
+			m_TargetSamplePoints->SetMeasurementVectorSize( 3 );
+
+			typename InputMeshType::PointsContainerConstIterator It = m_TargetMesh->GetPoints()->Begin();
+			while( It != m_TargetMesh->GetPoints()->End() )
+			{
+				PointType point = It.Value();
+				m_TargetSamplePoints->PushBack( point );
+				++It;
+			}
+
+			m_TargetKdTreeGenerator = TreeGeneratorType::New();
+			m_TargetKdTreeGenerator->SetSample( m_TargetSamplePoints );
+			m_TargetKdTreeGenerator->SetBucketSize( 4 );
+			m_TargetKdTreeGenerator->Update();
+		}
+
+		if (m_ShapeMesh)
+		{
+			m_ShapeSamplePoints = SampleType::New();
+			m_ShapeSamplePoints->SetMeasurementVectorSize( 3 );
+
+			typename InputMeshType::PointsContainerConstIterator It = m_ShapeMesh->GetPoints()->Begin();
+			while( It != m_ShapeMesh->GetPoints()->End() )
+			{
+				PointType point = It.Value();
+				m_ShapeSamplePoints->PushBack( point );
+				++It;
+			}
+
+			m_ShapeKdTreeGenerator = TreeGeneratorType::New();
+			m_ShapeKdTreeGenerator->SetSample( m_ShapeSamplePoints );
+			m_ShapeKdTreeGenerator->SetBucketSize( 4 );
+			m_ShapeKdTreeGenerator->Update();
+		}
+	}
+	
 	template< typename TInputMesh, typename TOutputMesh >
 	void
-		DeformableSimplexMesh3DFilterWithAdaptedConfidence< TInputMesh, TOutputMesh >
+		DeformableSimplexMesh3DWithShapePriorFilter< TInputMesh, TOutputMesh >
 		::GenerateData()
 	{
 		this->Initialize();
@@ -215,11 +214,10 @@ namespace itk
 			m_Step++;
 		}
 	}
-
-
+	
 	template< typename TInputMesh, typename TOutputMesh >
 	void
-		DeformableSimplexMesh3DFilterWithAdaptedConfidence< TInputMesh, TOutputMesh >
+		DeformableSimplexMesh3DWithShapePriorFilter< TInputMesh, TOutputMesh >
 		::ComputeDisplacement()
 	{
 		const InputMeshType *inputMesh = this->GetInput(0);
@@ -245,18 +243,7 @@ namespace itk
 
 			this->ComputeInternalForce(data);
 
-			//this->ComputeExternalForce(data,gradientImage);
-
-			double confidence = pointdata->GetElement(idx);
-
-			if (confidence>= this->GetConfidenceThreshold() )
-			{
-				data->externalForce.Fill(0);
-			}
-			else
-			{
-				this->ComputeExternalForce(data,gradientImage, idx, confidence);
-			}
+			this->ComputeExternalForce(data, idx);
 
 			displacement.SetVnlVector( m_Alpha * ( data->internalForce ).GetVnlVector()
 				+ ( data->externalForce ).GetVnlVector() );
@@ -267,27 +254,98 @@ namespace itk
 
 			dataIt++;
 		}
-
-		//std::cout<<"Error count: "<<error_count<<std::endl;
-		error_count = 0;
 	}
 
-	template< typename TInputMesh, typename TOutputMesh >
+	template< typename TInputMesh, typename TOutputMesh>
 	void
-		DeformableSimplexMesh3DFilterWithAdaptedConfidence< TInputMesh, TOutputMesh >
-		::ComputeExternalForce(SimplexMeshGeometry *data,const GradientImageType *gradientImage, unsigned int idx, double & confidence)
+		DeformableSimplexMesh3DWithShapePriorFilter< TInputMesh, TOutputMesh>
+		::ComputeExternalForce(SimplexMeshGeometry *data, unsigned int idx)
 	{
-		//this->ComputeExternalForce( data, gradientImage );
-	}
+		VectorType         vec_for;
+		VectorType         vec_for_gradient;
+		VectorType         vec_normal;
+		VectorType         vec_normal_no_cross;
+		VectorType         vec_tmp;
 
+		vec_normal.SetVnlVector( data->normal.GetVnlVector() );
+		vec_for_gradient.Fill( 0 );
+
+		PointType pos_cur;
+		pos_cur.CastFrom( data->pos );
+
+		double step_sum = 0.0;
+		double step_shape = 0.0;
+		double step_Target = 0.0;
+
+		double shape_force_factor = 0.6;
+		if (m_ShapeMesh )
+		{
+			typename TreeGeneratorType::KdTreeType::InstanceIdentifierVectorType neighbors;
+			this->m_ShapeKdTreeGenerator->GetOutput()->Search( pos_cur, 1u, neighbors );
+			PointType closestShapePt = this->m_ShapeKdTreeGenerator->GetOutput()->GetMeasurementVector( neighbors[0] );
+
+			double variance = 0.0;
+			this->m_VarianceMap->GetPointData(neighbors[0], &variance);
+
+			shape_force_factor *= (1.0-variance);
+
+			SimplexMeshGeometry* data_shape = this->m_ShapeMesh->GetGeometryData()->GetElement(neighbors[0]);
+			double phi_shape = data_shape->phi;
+
+			double phi_cur = data->phi;
+
+			step_shape = (180.0/(20.0*3.14))*(phi_cur - phi_shape); //20 degree as a threshold
+
+			if (step_shape > 1.0)
+			{
+				step_shape = 1.0;
+			}
+			else if (step_shape < -1.0)
+			{
+				step_shape = -1.0;
+			}
+		}
+
+		if (m_TargetMesh )
+		{
+			PointType closestTargetPt;
+			if (m_P2p)
+			{
+				closestTargetPt = m_TargetMesh->GetPoint( idx );
+			}
+			else
+			{
+				typename TreeGeneratorType::KdTreeType::InstanceIdentifierVectorType neighbors;
+				this->m_TargetKdTreeGenerator->GetOutput()->Search( pos_cur, 1u, neighbors );
+				closestTargetPt = this->m_TargetKdTreeGenerator->GetOutput()->GetMeasurementVector( neighbors[0] );
+			}
+
+			double dist = closestTargetPt.EuclideanDistanceTo( pos_cur );
+			vec_tmp = closestTargetPt - pos_cur;
+
+			if (vec_tmp.GetNorm() > 0.0)
+			{
+				vec_tmp.Normalize();
+			}
+
+			step_Target = dot_product( data->normal.GetVnlVector(), vec_tmp.GetVnlVector() );
+		}
+
+		step_sum = shape_force_factor*step_shape + (1.0-shape_force_factor)*step_Target;
+
+		vec_for = vec_normal * step_sum;
+
+		data->externalForce = vec_for * this->GetKappa() + vec_for_gradient * this->GetBeta();
+	}
+	
 	template< typename TInputMesh, typename TOutputMesh >
 	void
-		DeformableSimplexMesh3DFilterWithAdaptedConfidence< TInputMesh, TOutputMesh >
+		DeformableSimplexMesh3DWithShapePriorFilter< TInputMesh, TOutputMesh >
 		::Intervene()
 	{
 		
 	}
 
-} /* end namespace itk. */
+}/* end namespace itk. */
 
-#endif //__itkDeformableSimplexMesh3DFilterWithAdaptedConfidence_TXX
+#endif //__itkDeformableSimplexMesh3DWithShapePriorFilter_hxx

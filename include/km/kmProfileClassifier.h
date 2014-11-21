@@ -1008,7 +1008,7 @@ namespace km
 	/************************************************************************************************/
 	// Adaboost profile classifier
 	/************************************************************************************************/
-	class AdaboostProfileClassifier
+	class ProfileClassifier
 	{
 	public:
 		class AdaboostUnit
@@ -1184,7 +1184,7 @@ namespace km
 		
 		AdaboostUnitMapType adaboostUnitMap;
 
-		AdaboostProfileClassifier( PROFILE_CATEGORY category )
+		ProfileClassifier( PROFILE_CATEGORY category )
 		{
 			profile_category = category;
 
@@ -1192,9 +1192,9 @@ namespace km
 			fillFlannMatrix<IndexMatrixType>( cluster_labels_set, 0 );
 		}
 
-		~AdaboostProfileClassifier()
+		~ProfileClassifier()
 		{
-			std::cout<<"De-constructor of AdaboostProfileClassifier.."<<std::endl;
+			std::cout<<"De-constructor of ProfileClassifier.."<<std::endl;
 			//DELETE_NULLABLE_PRT(cluster_labels);
 			//DELETE_NULLABLE_PRT(cluster_labels_set);
 			std::cout<<"De-constructor end.."<<std::endl;

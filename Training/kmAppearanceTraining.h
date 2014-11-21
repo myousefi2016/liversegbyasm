@@ -15,7 +15,7 @@
 #include "itkTimeProbesCollectorBase.h"
 #include "itkMemoryProbesCollectorBase.h"
 
-#include "kmKNNProfileClassifier-FLANN.h"
+#include "kmProfileClassifier.h"
 #include "kmUtility.h"
 #include "kmVtkItkUtility.h"
 #include "kmProcessing.h"
@@ -426,11 +426,11 @@ namespace km
 		knnClassifierLiver.copyCluster(knnClassifierPlain);
 		knnClassifierLiver.save( profileUnitLiver.sampleHd5Filename );
 		{
-			km::AdaboostProfileClassifier adaboostClassifierLiver( profileUnitLiver.category );
+			km::ProfileClassifier adaboostClassifierLiver( profileUnitLiver.category );
 			adaboostClassifierLiver.train( knnClassifierLiver, outputdir );
 			adaboostClassifierLiver.save( profileUnitLiver.classifierHd5FileName );
 
-			km::AdaboostProfileClassifier::IntFloatMapType errorMap;
+			km::ProfileClassifier::IntFloatMapType errorMap;
 			adaboostClassifierLiver.test(knnClassifierLiver, errorMap);
 			km::assigneMesh<SimplexMeshType>( reflivermesh, 0.0 );
 			for (int pid=0;pid<reflivermesh->GetNumberOfPoints();pid++)
