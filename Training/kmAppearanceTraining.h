@@ -424,7 +424,7 @@ namespace km
 		knnClassifierLiver.setShapeNumber(numberOfData);
 		knnClassifierLiver.setShapePointsNumber(numberOfPoints);
 		knnClassifierLiver.loadSamples( profileUnitLiver.sampleTxtFilename );
-		knnClassifierLiver.copyCluster(knnClassifierCoordinate);
+		knnClassifierLiver.copyCluster(knnClassifierPlain);
 		knnClassifierLiver.save( profileUnitLiver.sampleHd5Filename );
 		{
 			km::ProfileClassifier adaboostClassifierLiver( profileUnitLiver.category );

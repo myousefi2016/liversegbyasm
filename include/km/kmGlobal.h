@@ -15,7 +15,7 @@ static double SHIFT_INSIDE = 3.0; //²ÉÑù±íÃæÄÚprofileÊ±£¬Ñù±¾´Ó±íÃæÉÏÏò±íÃæÄÚÆ«Ò
 static double SHIFT_OUTSIDE = 3.0; //²ÉÑù±íÃæÍâprofileÊ±£¬Ñù±¾´Ó±íÃæÉÏÏò±íÃæÍâÆ«ÒÆµÄ¾àÀë
 static int NUMBER_OF_INSIDE_PER_POINT = 3; // ÔÚÃ¿¸öMESHµã¸½½ü²ÉÑùinside profileµÄÊýÁ¿¡£
 static int NUMBER_OF_BOUNDARY_PER_POINT = 1; // ÔÚÃ¿¸öMESHµã¸½½ü²ÉÑùboundary profileµÄÊýÁ¿¡£
-static int NUMBER_OF_OUTSIDE_PER_POINT = 3; // ÔÚÃ¿¸öMESHµã¸½½ü²ÉÑùoutside profileµÄÊýÁ¿¡£
+static int NUMBER_OF_OUTSIDE_PER_POINT = 5; // ÔÚÃ¿¸öMESHµã¸½½ü²ÉÑùoutside profileµÄÊýÁ¿¡£
 //#define NUMBER_OF_PROFILE_PER_POINT (NUMBER_OF_INSIDE_PER_POINT+NUMBER_OF_BOUNDARY_PER_POINT+NUMBER_OF_OUTSIDE_PER_POINT)
 
 #define RESAMPLE_SPACING 2.0

@@ -228,11 +228,11 @@ namespace km
 				feature.push_back(coordiOffset[i]);
 			}
 
-			//VectorType coordiNormal = normal*coordiOffset.GetNorm();
-			//for (int i=0;i<coordiNormal.Dimension;i++)
-			//{
-			//	feature.push_back(coordiNormal[i]);
-			//}
+			VectorType coordiNormal = normal*coordiOffset.GetNorm();
+			for (int i=0;i<coordiNormal.Dimension;i++)
+			{
+				feature.push_back(coordiNormal[i]);
+			}
 
 			for (int i=0;i<gray_list.size();i++)
 			{
