@@ -9,7 +9,7 @@
 static double SIGMA = 2.0; //采样梯度profile时，计算梯度场采样的参数sigma
 static int NEIGHBOR_RADIUS = 1;
 static int PROFILE_DIM = 9;
-static double PROFILE_SPACING = 1.0; //毫米 PROFILE_LENTH/(PROFILE_DIM-1)
+static double PROFILE_SPACING = 1.5; //毫米 PROFILE_LENTH/(PROFILE_DIM-1)
 static double PROFILE_INSIDE_RATIO = 0.8;
 static double SHIFT_INSIDE = 3.0; //采样表面内profile时，样本从表面上向表面内偏移的距离
 static double SHIFT_OUTSIDE = 3.0; //采样表面外profile时，样本从表面上向表面外偏移的距离

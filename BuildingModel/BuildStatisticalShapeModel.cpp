@@ -170,7 +170,7 @@ void buildShapeModel(const char* datalist, const int referenceindex, const char*
 	{
 		float variance;
 		meanMesh->GetPointData(pointIterator.Index(), &variance);
-		meanMesh->SetPointData(pointIterator.Index(), (variance*variance)/(maxVariance*maxVariance));
+		meanMesh->SetPointData(pointIterator.Index(), variance/maxVariance);
 		++pointIterator;
 	}
 

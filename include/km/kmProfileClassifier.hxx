@@ -214,14 +214,11 @@ namespace km
 				feature.push_back(gray_list[i]);
 			}
 
-			km::normalizeList<double>(gray_list);
+			//km::normalizeList<double>(gradient_list);
 			for (int i=0;i<gradient_list.size();i++)
 			{
 				feature.push_back(gradient_list[i]);
 			}
-
-			//VectorType coordiOffset = ipoint-g_liverCentroid;
-			//feature.push_back(coordiOffset.GetNorm());
 		}
 		else if (profile_category == COORDINATE)
 		{
@@ -231,10 +228,15 @@ namespace km
 				feature.push_back(coordiOffset[i]);
 			}
 
-			VectorType coordiNormal = normal*coordiOffset.GetNorm();
-			for (int i=0;i<coordiNormal.Dimension;i++)
+			//VectorType coordiNormal = normal*coordiOffset.GetNorm();
+			//for (int i=0;i<coordiNormal.Dimension;i++)
+			//{
+			//	feature.push_back(coordiNormal[i]);
+			//}
+
+			for (int i=0;i<gray_list.size();i++)
 			{
-				feature.push_back(coordiNormal[i]);
+				feature.push_back(gray_list[i]);
 			}
 		}
 	}

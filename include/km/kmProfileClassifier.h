@@ -24,6 +24,7 @@
 #include "itkSampleClassifierFilter.h"
 #include "itkKdTreeBasedKmeansEstimator.h"
 #include <itkImageMomentsCalculator.h>
+#include "itkVariableLengthVector.h"
 
 #include "flann/flann.hpp"
 #include "flann/io/hdf5.h"
@@ -581,6 +582,53 @@ namespace km
 			delete[] data_single.ptr();
 		}
 
+		void autoWeight()
+		{
+			if ( isClustered() )
+			{
+				std::cout<<"Has been clustered. Automatic weighting can only be executed before clustering."<<std::endl;
+				return;
+			}
+			
+			KNNUnit* defaultUnit = this->getKNNUnitByClusterLabel(0);
+			
+			itk::VariableLengthVector<double> weights;
+			itk::VariableLengthVector<double> means;
+			weights.SetSize(defaultUnit->getProfileDimension());
+			weights.Fill(1.0);
+			means.SetSize(defaultUnit->getProfileDimension());
+			means.Fill(0.0);
+			double maxMean = 0.0;
+			
+			for (int c=0;c<defaultUnit->getProfileDimension();c++)
+			{
+				for (unsigned long r=0;r<defaultUnit->getPointsCount();r++)
+				{
+					means[c] += std::abs(defaultUnit->dataset[r][c]);
+				}
+				means[c] /= defaultUnit->getPointsCount();
+				if (means[c]>maxMean)
+				{
+					maxMean = means[c];
+				}
+			}
+
+			for (int c=0;c<defaultUnit->getProfileDimension();c++)
+			{
+				weights[c] = maxMean / means[c];
+				if (weights[c] != 1.0)
+				{
+					for (unsigned long r=0;r<defaultUnit->getPointsCount();r++)
+					{
+						defaultUnit->dataset[r][c] *= weights[c];
+					}
+				}
+			}
+
+			std::cout<<"[AutoWeight] Means: "<<means<<std::endl;
+			std::cout<<"[AutoWeight] Weights: "<<weights<<std::endl;
+		}
+
 		void load( const char* filename )
 		{
 			if (is_initilized)
@@ -783,7 +831,7 @@ namespace km
 			typedef itk::Statistics::WeightedCentroidKdTreeGenerator< SampleType > TreeGeneratorType;
 			TreeGeneratorType::Pointer treeGenerator = TreeGeneratorType::New();
 
-			std::cout << "TTTT" << std::endl;
+			//std::cout << "TTTT" << std::endl;
 
 			treeGenerator->SetSample( sample );
 			treeGenerator->SetBucketSize( 16 );
@@ -796,12 +844,12 @@ namespace km
 			EstimatorType::ParametersType initialMeans( measureLength * cluster_number_request );
 			initialMeans.Fill(0.0);
 
-			std::cout << "TTTT" << std::endl;
+			//std::cout << "TTTT" << std::endl;
 
 			estimator->SetParameters( initialMeans );
 			estimator->SetKdTree( treeGenerator->GetOutput() );
-			estimator->SetMaximumIteration( 200 );
-			estimator->SetCentroidPositionChangesThreshold(0.0);
+			estimator->SetMaximumIteration( 500 );
+			estimator->SetCentroidPositionChangesThreshold(1.0);
 			estimator->StartOptimization();
 
 			EstimatorType::ParametersType estimatedMeans = estimator->GetParameters();
@@ -838,7 +886,7 @@ namespace km
 			MembershipFunctionVectorType& membershipFunctionVector =
 				membershipFunctionVectorObject->Get();
 
-			std::cout << "TTTT" << std::endl;
+			//std::cout << "TTTT" << std::endl;
 
 			int index = 0;
 			for ( unsigned int i = 0 ; i < cluster_number_request ; i++ )
@@ -855,7 +903,7 @@ namespace km
 			classifier->SetMembershipFunctions( membershipFunctionVectorObject );
 			classifier->Update();
 
-			std::cout << "TTTT" << std::endl;
+			//std::cout << "TTTT" << std::endl;
 
 			const ClassifierType::MembershipSampleType* membershipSample = classifier->GetOutput();
 			ClassifierType::MembershipSampleType::ConstIterator labelIt = membershipSample->Begin();
@@ -939,18 +987,27 @@ namespace km
 		void copyCluster(km::KNNProfileClassifier & classiferSource)
 		{
 			const int cluster_number = classiferSource.cluster_labels_set.rows;
+
+			//Initial cluster map.
+			typedef std::map<int, int> ClusterCountMapType;
+			ClusterCountMapType clusterCountMap;//<cluster_label, point_count>
+
 			cluster_labels_set = IndexMatrixType(new int[cluster_number], cluster_number, 1);
 
 			//Copy cluster label set.
-			for (int i=0;i<classiferSource.cluster_labels_set.rows;i++)
+			for (int i=0;i<cluster_number;i++)
 			{
-				this->cluster_labels_set[i][0] = classiferSource.cluster_labels_set[i][0];
+				int cl = classiferSource.cluster_labels_set[i][0];
+				this->cluster_labels_set[i][0] = cl;
+				clusterCountMap.insert(std::pair<int, int>(cl, 0));
 			}
 
 			//Copy cluster labels.
 			for (int i=0;i<classiferSource.cluster_labels.rows;i++)
 			{
-				this->cluster_labels[i][0] = classiferSource.cluster_labels[i][0];
+				int cl = classiferSource.cluster_labels[i][0];
+				this->cluster_labels[i][0] = cl;
+				clusterCountMap[cl]++;
 			}
 
 			KNNUnit* unitDefault = knnUnitMap[0];
@@ -958,12 +1015,13 @@ namespace km
 			int numberOfSamplesPerLandmark = (unitDefault->getPointsCount()/shape_number)/shape_points_number;
 
 			//Calculate profile number for each cluster for allocating.
-			for ( int i=0;i<classiferSource.cluster_labels_set.rows;i++ )
+			for ( int i=0;i<cluster_number;i++ )
 			{
 				int cl = classiferSource.cluster_labels_set[i][0]; //cluster label
-				KNNUnit* sourceUnit = classiferSource.knnUnitMap[cl];
 
-				unsigned long profileCount = sourceUnit->getPointsCount();
+				unsigned long profileCount = clusterCountMap[cl] * this->shape_number * numberOfSamplesPerLandmark;;
+
+				std::cout<<"Profile count for cluster label "<<cl<<": "<<profileCount<<std::endl;
 
 				DatasetMatrixType datasetTmp(new float[profileCount*profile_dimension], profileCount, profile_dimension);
 				LabelMatrixType   labelsTmp(new int[profileCount], profileCount, 1);

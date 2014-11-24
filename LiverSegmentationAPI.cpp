@@ -330,7 +330,7 @@ namespace km
 		memorymeter.Start( "fitting" );
 		chronometer.Start( "fitting" );
 
-		bool flag_fittingByDistMap = false;
+		bool flag_fittingByDistMap = true;
 		bool flag_fittingByLiverProfile = false;
 		bool flag_deformingByLiverProfile = true;
 		bool flag_deformingBoundaryProfile = true;
@@ -383,7 +383,7 @@ namespace km
 				compositeTransform,
 				tmp_numberOfMainShapeComponents,
 				opt_scales,
-				1500);
+				300);
 
 			ShapeTransformType::ParametersType shapeParamPost = shapeTransform->GetParameters();
 			for (int ttt=0;ttt<shapeTransform->GetUsedNumberOfCoefficients();ttt++)
