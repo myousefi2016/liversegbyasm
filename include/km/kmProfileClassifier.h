@@ -54,31 +54,16 @@ namespace km
 	typedef std::map<BClassType, double> DistanceContainer;
 
 	template<class MatrixType>
-	void fillFlannMatrix( typename MatrixType& matrix, typename MatrixType::type val );
-	
-	double mappingItensity( double val );
-	
-	template<class T>
-	void 
-		calculateMeanAndStd(std::vector<T> & list, typename T& mean, typename T& sd);
-	
-	template<class T>
-	void 
-		normalizeList(std::vector<T> & list, typename T& mean, typename T& sd);
-		
-	template<class T>
-	void
-		normalizeList(std::vector<T> & list);
-		
-	template<class GradientInterpolatorType, class IntensityInterpolatorType>
-	void 
-		extractFeature(
-			const typename GradientInterpolatorType* gradientInterpolator, 
-			const typename IntensityInterpolatorType* intensityInterpolator,
-			const itk::SimplexMeshGeometry* geoData,
-			const itk::SimplexMeshGeometry::PointType & ipoint,
-			std::vector<double> & feature,
-			PROFILE_CATEGORY profile_category);
+	void fillFlannMatrix( typename MatrixType& matrix, typename MatrixType::type val )
+	{
+		for (int i=0;i<matrix.rows;i++)
+		{
+			for (int j=0;j<matrix.cols;j++)
+			{
+				matrix[i][j] = val;
+			}
+		}
+	}
 
 	/************************************************************************************************/
 	// Adaboost profile classifier
@@ -1258,6 +1243,19 @@ namespace km
 			std::cout<<"De-constructor end.."<<std::endl;
 		}
 
+		int getClusterLabel(int idx)
+		{
+			if (idx>this->cluster_labels.rows-1)
+			{
+				std::cout<<"Cluster label does not exist for pointId: "<<idx<<std::endl;
+				return 0;
+			}
+			else
+			{
+				return this->cluster_labels[idx][0];
+			}
+		}
+
 		int getNumberOfClusters()
 		{
 			if (cluster_labels_set.rows > 0)
@@ -1285,7 +1283,7 @@ namespace km
 			}
 			else
 			{
-				cl = this->cluster_labels[ptidx][0];
+				cl = this->getClusterLabel(ptidx);
 			}
 
 			return this->getAdaboostUnitByClusterLabel(cl);
@@ -1566,8 +1564,6 @@ namespace km
 		}
 	};
 }
-
-#include "kmProfileClassifier.hxx"
 
 #undef DELETE_NULLABLE_PRT
 #undef MAX_NEIGHBOUR

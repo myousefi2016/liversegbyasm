@@ -28,8 +28,10 @@
 #include "itkSimplexMeshGeometry.h"
 #include "itkConstNeighborhoodIterator.h"
 #include "itkCompositeTransform.h"
+#include "itkCovariantVector.h"
 
 #include "kmProfileClassifier.h"
+#include "kmVtkItkUtility.h"
 #include "kmGlobal.h"
 #include "kmUtility.h"
 
@@ -73,223 +75,6 @@ namespace km
 		KdTree = 1,
 		P2P
 	};
-
-	template<class FloatImageType, class MeshType, class GradientInterpolatorType, class IntensityInterpolatorType>
-	void
-		generateBestPointSet(
-		km::ProfileClassifier * classifier,
-		const typename GradientInterpolatorType* gradientInterpolator, 
-		const typename IntensityInterpolatorType* intensityInterpolator,
-		typename MeshType* outputMesh,
-		const typename MeshType* liverMesh,
-		const typename MeshType* varianceMap,
-		const double spacingDistForTest = 1.5,
-		const int numberOfPointsForTest = 10)
-	{
-		typedef MeshType::PointsContainer PointsContainer;
-		typedef MeshType::PointsContainerConstPointer PointsContainerConstPointer;
-		typedef MeshType::PointsContainerPointer PointsContainerPointer;
-		typedef MeshType::PointsContainerIterator PointsContainerIterator;
-		typedef MeshType::PointDataContainer PointDataContainer;
-		typedef MeshType::GeometryMapType GeometryMapType;
-		typedef GeometryMapType::Pointer GeometryMapPointer;
-		typedef GeometryMapType::Iterator GeometryMapIterator;
-		typedef itk::SimplexMeshGeometry::VectorType VectorType;
-		typedef itk::SimplexMeshGeometry::PointType PointType;
-
-		km::assigneMesh<MeshType>(outputMesh, 0.0);
-
-		GeometryMapIterator geoIt = liverMesh->GetGeometryData()->Begin();
-		GeometryMapIterator geoItEnd = liverMesh->GetGeometryData()->End();
-
-		itk::SimplexMeshGeometry *geodata;
-		while (geoIt!=geoItEnd)
-		{
-			MeshType::PointIdentifier idx = geoIt.Index();
-			geodata = geoIt.Value();
-
-			PointType mpoint = liverMesh->GetPoint(idx);
-			VectorType normal;
-			normal.Set_vnl_vector(geodata->normal.Get_vnl_vector());
-
-			double best_offset = 0.0;
-			double current_confidence = 0.0;
-			//Check the direction we should search for the next best position.
-			double direction = 1.0;
-			{
-				std::vector<FLOATTYPE> feature;
-				km::extractFeature<GradientInterpolatorType, IntensityInterpolatorType>(
-					gradientInterpolator,
-					intensityInterpolator,
-					geodata,
-					mpoint,
-					feature,
-					classifier->profile_category);
-
-				double current_confidence = 2*classifier->classify( feature, idx ) - 1.0;
-
-				direction = current_confidence;
-			}
-			if (classifier->profile_category == LIVER)
-			{
-				double pointVariance = 1.0;
-				varianceMap->GetPointData(idx, &pointVariance);
-
-				double pointError = 0.0;
-
-				int tmpNumberOfPointsForTest = numberOfPointsForTest;//static_cast<int>(numberOfPointsForTest*pointVariance+3.0);
-
-				std::vector<double> confidences_trace;
-				confidences_trace.push_back(current_confidence);
-
-				for(int i=0;i<tmpNumberOfPointsForTest;i++)
-				{
-					double offset = spacingDistForTest*(i+1)*direction;
-					PointType pttest = mpoint + normal*offset;
-
-					double confidence = 0.0;
-					if (intensityInterpolator->IsInsideBuffer(pttest))
-					{
-						std::vector<FLOATTYPE> feature;
-						km::extractFeature<GradientInterpolatorType, IntensityInterpolatorType>(
-							gradientInterpolator,
-							intensityInterpolator,
-							geodata,
-							pttest,
-							feature,
-							classifier->profile_category);
-
-						confidence = classifier->classify(feature,idx);
-
-						confidence = 2*confidence - 1.0;
-					}
-					else
-					{
-						i = tmpNumberOfPointsForTest;
-					}
-
-					confidences_trace.push_back(confidence);
-					double accumulated_confidences = 0.0;
-					for (int k=confidences_trace.size()-2;k<confidences_trace.size();k++)
-					{
-						accumulated_confidences += confidences_trace[k];
-					}
-					if (accumulated_confidences*direction<0)
-					{
-						best_offset = offset - direction*spacingDistForTest;
-						break;
-					}
-					else
-					{
-						best_offset = offset;		
-					}
-
-					if (confidence * direction > 0)
-					{
-						direction = confidence;
-					}
-				}
-			}
-			else if (classifier->profile_category == BOUNDARY) //Find best boundary point.
-			{
-				int tmpNumberOfPointsForTest = numberOfPointsForTest;
-
-				std::vector<double> confidences_trace;
-				std::vector<double> offset_trace;
-
-				direction = 1.0;
-				double offset = -1.0*spacingDistForTest*(tmpNumberOfPointsForTest/5.0);
-				for(int i=0;i<tmpNumberOfPointsForTest;i++)
-				{
-					PointType pttest = mpoint + normal*offset;
-
-					double confidence = 0.0;
-					if (intensityInterpolator->IsInsideBuffer(pttest))
-					{
-						std::vector<FLOATTYPE> feature;
-						km::extractFeature<GradientInterpolatorType, IntensityInterpolatorType>(
-							gradientInterpolator,
-							intensityInterpolator,
-							geodata,
-							pttest,
-							feature,
-							classifier->profile_category);
-
-						confidence = classifier->classify( feature, idx );
-					}
-					else
-					{
-						i = tmpNumberOfPointsForTest;
-					}
-
-					confidences_trace.push_back(confidence);
-					offset_trace.push_back(offset);
-
-					offset = offset + spacingDistForTest;
-				}
-
-				double bestconfidence = 0.15;
-				best_offset = 0.0;
-				int N = 3; //accumulate confidence for local N confidences.
-				for (int k=0;k<confidences_trace.size();k++)
-				{
-					double accumulated_confidences = 0.0;
-					int local_idx_start = std::max(0, k-N/2);
-					int local_idx_end = std::min(static_cast<int>(confidences_trace.size()-1), k+N/2);
-
-					for (int t=local_idx_start;t<local_idx_end;t++)
-					{
-						accumulated_confidences += confidences_trace[t];
-					}
-					if (accumulated_confidences>bestconfidence)
-					{
-						bestconfidence = accumulated_confidences;
-						best_offset = offset_trace[k];
-					}
-					//if (confidences_trace[k]>bestconfidence)
-					//{
-					//	bestconfidence = confidences_trace[k];
-					//	best_offset = offset_trace[k];
-					//}
-				}
-			}
-			else
-			{
-				KM_DEBUG_ERROR( "Unknown profile category." );
-				break;
-			}
-
-			outputMesh->SetPointData(idx, best_offset);
-
-			geoIt++;
-		}
-
-		if (classifier->profile_category != BOUNDARY)
-		{
-			//Remove noise point.
-			km::smoothMeshData<MeshType>(outputMesh, 1);
-		}
-
-		geoIt = liverMesh->GetGeometryData()->Begin();
-		geoItEnd = liverMesh->GetGeometryData()->End();
-
-		while (geoIt!=geoItEnd)
-		{
-			unsigned int idx = geoIt.Index();
-			geodata = geoIt.Value();
-
-			VectorType normal;
-			normal.Set_vnl_vector(geodata->normal.Get_vnl_vector());
-
-			double offsetVal = 0.0;
-			outputMesh->GetPointData(idx, &offsetVal);
-
-			PointType oldPos = liverMesh->GetPoint(idx);
-			outputMesh->SetPoint(idx, oldPos + normal*offsetVal);
-
-			geoIt++;
-		}
-	}
 
 	template<class MeshType, class TransformType>
 	void
@@ -447,12 +232,203 @@ namespace km
 		return paradiff;
 	}
 
-	template<class MatrixType, class RigidTransformType>
-	void FillRigidTransform(const MatrixType & mat, RigidTransformType * rigidTransform)
-	{
-		RigidTransformType::MatrixType rigidMatrix = rigidTransform->GetMatrix();
-		RigidTransformType::OffsetType rigidOffset = rigidTransform->GetOffset();
+	//template<class ClassifiedPointsKdTreeType, class MeshType>
+	//void
+	//	generateBestPointSet2(
+	//	typename ClassifiedPointsKdTreeType* classifiedKdTree, 
+	//	typename MeshType* outputMesh,
+	//	const typename MeshType* liverMesh)
+	//{
+	//	typedef MeshType::GeometryMapType GeometryMapType;
+	//	typedef GeometryMapType::Iterator GeometryMapIterator;
+	//	typedef MeshType::PointType PointType;
+	//	typedef PointType::VectorType VectorType;
 
+	//	km::assigneMesh<MeshType>(outputMesh, 0.0);
+
+	//	GeometryMapIterator geoIt = liverMesh->GetGeometryData()->Begin();
+	//	GeometryMapIterator geoItEnd = liverMesh->GetGeometryData()->End();
+
+	//	itk::SimplexMeshGeometry *geodata;
+	//	while (geoIt!=geoItEnd)
+	//	{
+	//		int idx = geoIt.Index();
+	//		geodata = geoIt.Value();
+
+	//		VectorType normal;
+	//		normal.Set_vnl_vector(geodata->normal.Get_vnl_vector());
+
+	//		PointType curPoint = liverMesh->GetPoint(idx);
+	//		PointType closedBoundaryPoint;
+
+	//		//std::cout<<"Find closest bounday point for: "<<idx<<std::endl;
+	//		bool found = classifiedKdTree->FindClosetBoundaryPoint(closedBoundaryPoint, curPoint, idx);
+
+	//		double offset = 0.0;
+	//		if (found)
+	//		{
+	//			VectorType shiftVec = closedBoundaryPoint - curPoint;
+	//			offset = shiftVec*normal;
+	//		}
+
+	//		if (isAbnormal(idx))
+	//		{
+	//			offset = offset>0?-1.0:1.0;
+	//		}
+
+	//		outputMesh->SetPointData(idx, offset);
+
+	//		geoIt++;
+	//	}
+
+	//	//Remove noise point.
+	//	km::smoothMeshData<MeshType>(outputMesh, 0);
+
+	//	geoIt = liverMesh->GetGeometryData()->Begin();
+	//	geoItEnd = liverMesh->GetGeometryData()->End();
+
+	//	while (geoIt!=geoItEnd)
+	//	{
+	//		unsigned int idx = geoIt.Index();
+	//		geodata = geoIt.Value();
+
+	//		VectorType normal;
+	//		normal.Set_vnl_vector(geodata->normal.Get_vnl_vector());
+
+	//		double offsetVal = 0.0;
+	//		outputMesh->GetPointData(idx, &offsetVal);
+
+	//		PointType oldPos = liverMesh->GetPoint(idx);
+	//		outputMesh->SetPoint(idx, oldPos + normal*offsetVal);
+
+	//		geoIt++;
+	//	}
+
+	//}
+
+	template<class ClassifiedPointsKdTreeType, class ProfileExtractorType, class FloatImageType, class MeshType>
+	void
+		deformByLiverClassification(
+		km::ProfileClassifier * classifier,
+		ClassifiedPointsKdTreeType * classifiedKdTree,
+		ProfileExtractorType * profileExtractor,
+		typename MeshType* outputMesh,
+		const typename MeshType* liverMesh,
+		double searchStep = 1.5,
+		unsigned int maxSearchPoints = 20)
+	{
+		typedef MeshType::PointsContainer PointsContainer;
+		typedef MeshType::PointsContainerConstPointer PointsContainerConstPointer;
+		typedef MeshType::PointsContainerPointer PointsContainerPointer;
+		typedef MeshType::PointsContainerIterator PointsContainerIterator;
+		typedef MeshType::PointDataContainer PointDataContainer;
+		typedef MeshType::GeometryMapType GeometryMapType;
+		typedef GeometryMapType::Pointer GeometryMapPointer;
+		typedef GeometryMapType::Iterator GeometryMapIterator;
+		typedef itk::SimplexMeshGeometry::VectorType VectorType;
+		typedef itk::SimplexMeshGeometry::PointType PointType;
+
+		km::assigneMesh<MeshType>(outputMesh, 0.0);
+
+		GeometryMapIterator geoIt = liverMesh->GetGeometryData()->Begin();
+		GeometryMapIterator geoItEnd = liverMesh->GetGeometryData()->End();
+
+		itk::SimplexMeshGeometry *geodata;
+		while (geoIt!=geoItEnd)
+		{
+			MeshType::PointIdentifier idx = geoIt.Index();
+			geodata = geoIt.Value();
+
+			PointType mpoint = liverMesh->GetPoint(idx);
+			VectorType normal;
+			normal.Set_vnl_vector(geodata->normal.Get_vnl_vector());
+
+			double best_offset = 0.0;
+			if (isAbnormal(idx))
+			{
+				//std::cout<<"Find closest bounday point for: "<<idx<<std::endl;
+				PointType closedBoundaryPoint;
+				bool found = classifiedKdTree->FindClosetBoundaryPoint(closedBoundaryPoint, mpoint, idx);
+				if (found)
+				{
+					VectorType shiftVec = closedBoundaryPoint - mpoint;
+					best_offset = shiftVec*normal;
+				}
+			}
+			else
+			{
+				double maxDist = g_varianceMap[idx];
+				double direction = 1.0;
+				unsigned int searchedPoints = 1;
+				while(searchedPoints<=maxSearchPoints && std::abs(best_offset)<=maxDist)
+				{
+					PointType pttest = mpoint + normal*best_offset;
+					double tmpDirection = -1.0;
+					if (profileExtractor->isInsideBuffer(pttest))
+					{
+						std::vector<FLOATTYPE> feature;
+						profileExtractor->extractFeatureSet(feature, classifier->profile_category, geodata, pttest);
+
+						tmpDirection = 2.0*classifier->classify(feature,idx) - 1.0;
+					}
+					best_offset += tmpDirection * searchStep;
+					if (searchedPoints == 1)
+					{
+						direction = tmpDirection>0?1.0:-1.0;
+					}
+					else if (tmpDirection*direction<0) //Change direction. Break from here.
+					{
+						break;
+					}
+					searchedPoints++;
+				}
+			}
+
+			if (isAbnormal(idx))
+			{
+				best_offset = best_offset>0?-1.0*searchStep:searchStep;
+			}
+
+			outputMesh->SetPointData(idx, best_offset);
+
+			geoIt++;
+		}
+
+		//Remove noise point.
+		km::smoothMeshData<MeshType>(outputMesh, 0);
+
+		geoIt = liverMesh->GetGeometryData()->Begin();
+		geoItEnd = liverMesh->GetGeometryData()->End();
+
+		while (geoIt!=geoItEnd)
+		{
+			unsigned int idx = geoIt.Index();
+			geodata = geoIt.Value();
+
+			VectorType normal;
+			normal.Set_vnl_vector(geodata->normal.Get_vnl_vector());
+
+			double offsetVal = 0.0;
+			outputMesh->GetPointData(idx, &offsetVal);
+
+			PointType oldPos = liverMesh->GetPoint(idx);
+			outputMesh->SetPoint(idx, oldPos + normal*offsetVal);
+
+			geoIt++;
+		}
+	}
+
+	enum FittingType
+	{
+		Rigid = 0,
+		Shape
+	};
+
+	template<class MatrixType, class TransformType>
+	void FillRigidTransform(const MatrixType & mat, TransformType * transform)
+	{
+		TransformType::MatrixType rigidMatrix = transform->GetMatrix();
+		TransformType::OffsetType rigidOffset = transform->GetOffset();
 		for (int i=0;i<3;i++)
 		{
 			for (int j=0;j<3;j++)
@@ -461,59 +437,206 @@ namespace km
 			}
 		}
 		//std::cout<<rigidMatrix<<std::endl;
-
 		for (int i=0;i<Dimension;i++)
 		{
 			rigidOffset[i] = mat(i, Dimension);
 		}
 		//std::cout<<rigidOffset<<std::endl;
-
-		rigidTransform->SetMatrix( rigidMatrix );
-		rigidTransform->SetOffset( rigidOffset );
+		transform->SetMatrix( rigidMatrix );
+		transform->SetOffset( rigidOffset );
 	}
 
-	template<class VectorType, class ShapeTransformType>
-	void FillShapeTransform(const VectorType & vec, ShapeTransformType * shapeTransform)
+	template<class MatrixType, class TransformType>
+	void FillShapeTransform(const MatrixType & mat, TransformType * transform)
 	{
-		ShapeTransformType::ParametersType shapeParams = shapeTransform->GetParameters();
-		for (int i=0;i<shapeTransform->GetUsedNumberOfCoefficients();i++)
+		TransformType::ParametersType shapeParams = transform->GetParameters();
+		for (int i=0;i<transform->GetUsedNumberOfCoefficients();i++)
 		{
-			if (vec[i]<-3.0){
+			if (mat[i]<-3.0){
 				shapeParams[i] = -3;
-			}else if (vec[i]>3.0){
+			}else if (mat[i]>3.0){
 				shapeParams[i] = 3;
 			}else{
-				shapeParams[i] = vec[i];	
+				shapeParams[i] = mat[i];	
 			}
 		}
-
-		shapeTransform->SetParameters(shapeParams);
+		transform->SetParameters(shapeParams);
+		KM_DEBUG_PRINT("Shape paramters after fitting", shapeParams);
 	}
 
-	template<class MatrixType, class MeshType>
-	void fillPointSetIntoMatrix(MatrixType& matrix, const MeshType * mesh)
+	void initAbnormalMap(unsigned int N, bool reset = false)
 	{
-		typedef MeshType::PointType PointType;
-		typedef MeshType::PointIdentifier PointIdentifier;
-		typedef MeshType::PointsContainerConstIterator PointsContainerConstIterator;
-
-		PointsContainerConstIterator ptIt = mesh->GetPoints()->Begin();
-		PointsContainerConstIterator ptItEnd = mesh->GetPoints()->End();
-		while(ptIt != ptItEnd)
+		if (g_fittingErrorMap.size()==N && !reset)
 		{
-			PointIdentifier idx = ptIt.Index();
-			PointType pt = ptIt.Value();
-			for (int d=0;d<Dimension;d++)
+			return;
+		}
+		else
+		{
+			for (int idx=0;idx<N;idx++)
 			{
-				matrix(idx, d) = pt[d];
+				g_fittingErrorMap[idx] = 0.0;
 			}
-			ptIt++;
+		}
+	}
+
+	bool isAbnormal(int idx)
+	{
+		return g_fittingErrorMap[idx]>=g_fitting_error_threshold?true:false;
+	}
+
+	unsigned int countAbnormal()
+	{
+		unsigned int count = 0;
+		for (int idx=0;idx<g_fittingErrorMap.size();idx++)
+		{
+			if(isAbnormal(idx)) count++;
+		}
+		return count;
+	}
+
+	template<class MeshType, class MatrixType>
+	void fillPointSetIntoMatrix(const MeshType* mesh, MatrixType& matrix, FittingType rigidOrShape)
+	{
+		//KM_DEBUG_INFO("fillPointSetIntoMatrix");
+		unsigned int Dimension = MeshType::PointDimension;
+		unsigned int numberOfLandmarks = mesh->GetNumberOfPoints();
+
+		if (rigidOrShape == Rigid)
+		{
+			matrix.setConstant(numberOfLandmarks, Dimension+1, 1.0);
+			unsigned long rowcnt = 0;
+			for (int idx=0;idx<numberOfLandmarks;idx++)
+			{
+				MeshType::PointType pt = mesh->GetPoint(idx);
+				for (int d=0;d<Dimension;d++)
+				{
+					matrix(rowcnt, d) = pt[d];
+				}
+				rowcnt++;
+			}
+		}
+		else
+		{
+			matrix.setZero( numberOfLandmarks*Dimension, 1);
+			unsigned long rowcnt = 0;
+			for (int idx=0;idx<numberOfLandmarks;idx++)
+			{
+				MeshType::PointType pt = mesh->GetPoint(idx);
+				for (int d=0;d<Dimension;d++)
+				{
+					matrix(rowcnt, 0) = pt[d];
+					rowcnt++;
+				}
+			}
+		}
+	}
+
+	template<class MatrixType>
+	void
+		removeAbnormal(const typename MatrixType & matrix, typename MatrixType& matrixUpdated, FittingType rigidOrShape)
+	{
+		if (countAbnormal() == 0)
+		{
+			matrixUpdated = matrix;
+			return;
+		}
+
+		unsigned int Dimension = 3;
+		if (rigidOrShape == Rigid)
+		{
+			unsigned int numberOfLandmarks = matrix.rows();
+			unsigned int numberOfAbnormal = countAbnormal();
+			matrixUpdated.setZero(numberOfLandmarks-numberOfAbnormal, matrix.cols());
+			unsigned long ptcount = 0;
+			for (int idx=0;idx<numberOfLandmarks;idx++)
+			{
+				if (!isAbnormal(idx))
+				{
+					for (int c=0;c<matrix.cols();c++)
+					{
+						matrixUpdated(ptcount, c) = matrix(idx, c);
+					}
+					ptcount++;
+				}
+			}
+			KM_ASSERT(ptcount == matrixUpdated.rows());
+		}
+		else
+		{
+			unsigned int numberOfLandmarks = matrix.rows()/Dimension;
+			unsigned int numberOfAbnormal = countAbnormal();
+			matrixUpdated.setZero((numberOfLandmarks-numberOfAbnormal)*Dimension, matrix.cols());
+			unsigned long ptcount = 0;
+			for (int idx=0;idx<numberOfLandmarks;idx++)
+			{
+				if (!isAbnormal(idx))
+				{
+					for (int d=0;d<Dimension;d++)
+					{
+						for (int c=0;c<matrix.cols();c++)
+						{
+							matrixUpdated(ptcount*Dimension+d, c) = matrix(idx*Dimension+d, c);
+						}
+					}
+					ptcount++;
+				}
+			}
+			KM_ASSERT(ptcount*Dimension == matrixUpdated.rows());
+		}
+
+		//KM_DEBUG_PRINT("Matrix rows before removing ", matrix.rows());
+		//KM_DEBUG_PRINT("Matrix rows after removing ", matrixUpdated.rows());
+	}
+
+	template<class MeshType>
+	void
+		updateFittingErrorMap(
+		const typename MeshType * tagetMesh,
+		const typename MeshType * unfittedMesh,
+		const typename MeshType * fittedMesh)
+	{
+		KM_ASSERT(tagetMesh->GetNumberOfPoints() == unfittedMesh->GetNumberOfPoints());
+
+		typedef MeshType::PointType PointType;
+		typedef PointType::VectorType VectorType;
+		for (int idx=0;idx<tagetMesh->GetNumberOfPoints();idx++)
+		{			
+			PointType targetPoint = tagetMesh->GetPoint(idx);
+			PointType unfittedPoint = unfittedMesh->GetPoint(idx);
+			PointType fittedPoint = fittedMesh->GetPoint(idx);
+
+			double errorUpdated = 0.0;
+			double unfittedDist = unfittedPoint.EuclideanDistanceTo(targetPoint);
+
+			if (isAbnormal(idx))
+			{
+				errorUpdated = 0.0;
+			}
+			else if (unfittedDist < 5.0)
+			{
+				errorUpdated = 0.0;
+			}
+			else
+			{
+				double fittedDist = fittedPoint.EuclideanDistanceTo(targetPoint);
+				errorUpdated = fittedDist / unfittedDist;
+			}
+
+			g_fittingErrorMap[idx] = g_fittingErrorMap[idx]*0.8 + errorUpdated*0.2;
+		}
+
+		unsigned int abnormalCount = countAbnormal();
+		if (abnormalCount > g_fittingErrorMap.size() * 0.25)
+		{
+			KM_DEBUG_ERROR("Abnormal points has exceed 25%");
+			//initAbnormalMap(g_fittingErrorMap.size(), true);
 		}
 	}
 
 	template<class MeshType, class StatisticalModelType, class RigidTransformType, class ShapeTransformType>
 	void
-		compositeTransformFitting( const MeshType* targetMesh, 
+		compositeTransformFitting( 
+		const MeshType* targetMesh, 
 		const StatisticalModelType* model, 
 		RigidTransformType * rigidTransform,
 		ShapeTransformType * shapeTransform)
@@ -526,56 +649,101 @@ namespace km
 		}
 
 		MeshType::Pointer referenceShapeMesh = model->GetRepresenter()->GetReference();
-		MeshType::Pointer meanShapeMesh = model->DrawMean();
-		unsigned int numberOfLandmarks = referenceShapeMesh->GetNumberOfPoints();
 
+		unsigned int numberOfLandmarks = referenceShapeMesh->GetNumberOfPoints();
+		km::initAbnormalMap(numberOfLandmarks);
+
+		typedef StatisticalModelType::ImplType StatisticalModelImplType;
 		typedef statismo::MatrixType StatismoMatrixType;
 		typedef statismo::VectorType StatismoVectorType;
-		typedef StatisticalModelType::VectorType VnlVectorType;
 
-		StatismoMatrixType matrixToBeFitted;
-		matrixToBeFitted.setConstant(numberOfLandmarks, Dimension+1, 1.0);
-
-		StatismoMatrixType matrixTargetForRigid;
-		matrixTargetForRigid.setConstant(numberOfLandmarks, Dimension+1, 1.0);
-
-		StatismoMatrixType matrixTargetForShape;
-		matrixTargetForShape.setConstant(numberOfLandmarks, Dimension+1, 1.0);
-
-		StatismoVectorType I = StatismoVectorType::Ones(matrixToBeFitted.cols());
-
-		unsigned int iterNum = 0;
-		while(iterNum < 1)
 		{
-			std::cout<<"*****************Fit rigid parameters " << iterNum << " ****************"<<std::endl;
-
-			MeshType::ConstPointer shapeFittedMesh = km::transformMesh<MeshType, ShapeTransformType>(referenceShapeMesh, shapeTransform);
+			MeshType::ConstPointer sourceMeshForRigid = km::transformMesh<MeshType, ShapeTransformType>(referenceShapeMesh, shapeTransform);
 			MeshType::ConstPointer targetMeshForRigid = targetMesh;
 
-			fillPointSetIntoMatrix<StatismoMatrixType, MeshType>(matrixToBeFitted, shapeFittedMesh);
-			fillPointSetIntoMatrix<StatismoMatrixType, MeshType>(matrixTargetForRigid, targetMesh);
+			//StatismoMatrixType sourceMatrixForRigidTmp, targetMatrixForRigidTmp;
+			StatismoMatrixType sourceMatrixForRigid, targetMatrixForRigid;
+			fillPointSetIntoMatrix<MeshType, StatismoMatrixType>(sourceMeshForRigid, sourceMatrixForRigid, Rigid);
+			fillPointSetIntoMatrix<MeshType, StatismoMatrixType>(targetMeshForRigid, targetMatrixForRigid, Rigid);
 
-			StatismoMatrixType Mmatrix = matrixToBeFitted.transpose() * matrixToBeFitted;
+			//removeAbnormal<StatismoMatrixType>(sourceMatrixForRigidTmp, sourceMatrixForRigid, Rigid);
+			//removeAbnormal<StatismoMatrixType>(targetMatrixForRigidTmp, targetMatrixForRigid, Rigid);
+
+			StatismoVectorType I = StatismoVectorType::Ones(sourceMatrixForRigid.cols());
+			StatismoMatrixType Mmatrix = sourceMatrixForRigid.transpose() * sourceMatrixForRigid;
 			Mmatrix.diagonal() += I;
-
 			StatismoMatrixType MInverseMatrix = Mmatrix.inverse();
-
-			const StatismoMatrixType& WT = matrixToBeFitted.transpose();
-
-			StatismoMatrixType coeffsRigid = MInverseMatrix * (WT * matrixTargetForRigid);
+			const StatismoMatrixType& WT = sourceMatrixForRigid.transpose();
+			StatismoMatrixType coeffsRigid = MInverseMatrix * (WT * targetMatrixForRigid);
 
 			FillRigidTransform<StatismoMatrixType, RigidTransformType>(coeffsRigid.transpose(), rigidTransform);
+		}
 
+		{
 			/*****************Fit shape parameters****************/
+
 			RigidTransformType::Pointer inversedRigidTransform = RigidTransformType::New();
 			rigidTransform->GetInverse( inversedRigidTransform );
-
 			MeshType::Pointer targetMeshForShape = km::transformMesh<MeshType, RigidTransformType>(targetMesh, inversedRigidTransform);
-			VnlVectorType coeffsShape = model->ComputeCoefficientsForDataset( targetMeshForShape );
+			MeshType::Pointer sourceMeshForShape = model->DrawMean();
 
-			FillShapeTransform<VnlVectorType, ShapeTransformType>(coeffsShape, shapeTransform);
+			//StatismoVectorType sourceMatrixForShapeTmp, targetMatrixForShapeTmp;
+			StatismoVectorType sourceMatrixForShape, targetMatrixForShape;
+			//const StatismoMatrixType & basisMatrixForShapeTmp = model->GetstatismoImplObj()->GetPCABasisMatrix();
+			//StatismoMatrixType basisMatrixForShape;
+			const StatismoMatrixType & basisMatrixForShape = model->GetstatismoImplObj()->GetPCABasisMatrix();
+			fillPointSetIntoMatrix<MeshType, StatismoVectorType>(sourceMeshForShape, sourceMatrixForShape, Shape);
+			fillPointSetIntoMatrix<MeshType, StatismoVectorType>(targetMeshForShape, targetMatrixForShape, Shape);
 
-			iterNum++;
+			//removeAbnormal<StatismoVectorType>(sourceMatrixForShapeTmp, sourceMatrixForShape, Shape);
+			//removeAbnormal<StatismoVectorType>(targetMatrixForShapeTmp, targetMatrixForShape, Shape);
+			//removeAbnormal<StatismoMatrixType>(basisMatrixForShapeTmp, basisMatrixForShape, Shape);
+
+			StatismoVectorType I = StatismoVectorType::Ones(basisMatrixForShape.cols());
+			StatismoMatrixType Mmatrix = basisMatrixForShape.transpose() * basisMatrixForShape;
+			Mmatrix.diagonal() += I;
+			StatismoMatrixType MInverseMatrix = Mmatrix.inverse();
+			const StatismoMatrixType& WT = basisMatrixForShape.transpose();
+			StatismoVectorType coeffsShape = MInverseMatrix * (WT * (targetMatrixForShape-sourceMatrixForShape));
+
+			MeshType::Pointer shapeUnfittedMesh = km::transformMesh<MeshType, ShapeTransformType>(referenceShapeMesh, shapeTransform);
+
+			FillShapeTransform<StatismoVectorType, ShapeTransformType>(coeffsShape, shapeTransform);
+
+			MeshType::Pointer shapeFittedMesh = km::transformMesh<MeshType, ShapeTransformType>(referenceShapeMesh, shapeTransform);
+
+			if(g_disable_abnormal)
+			{
+				km::updateFittingErrorMap<MeshType>(targetMeshForShape, shapeUnfittedMesh, shapeFittedMesh);
+			}
+		}
+	}
+
+	template<class StatisticalModelType, class MeshType>
+	void
+		initModelVariance(const typename StatisticalModelType * model, const typename MeshType* mesh, int numberOfComponents = 10)
+	{
+		typedef itk::SimplexMeshGeometry SimplexMeshGeometryType;
+		typedef SimplexMeshGeometryType::CovariantVectorType CovariantVectorType;
+
+		SimplexMeshGeometryType *geodata;
+
+		StatisticalModelType::MatrixType basisMatrix = model->GetPCABasisMatrix();
+		for (int id=0;id<mesh->GetNumberOfPoints();id++)
+		{
+			double variance = 0.0;
+			geodata = mesh->GetGeometryData()->GetElement(id);
+			for (unsigned p=0;p<numberOfComponents;p++)
+			{
+				double varOnNormal = 0.0;
+				for (unsigned d=0; d<Dimension; d++) 
+				{
+					unsigned idx = model->GetRepresenter()->MapPointIdToInternalIdx(id, d);
+					varOnNormal += geodata->normal[d] * basisMatrix[idx][p];
+				}
+				variance += std::abs(varOnNormal);
+			}
+			g_varianceMap[id] = variance;
 		}
 	}
 }

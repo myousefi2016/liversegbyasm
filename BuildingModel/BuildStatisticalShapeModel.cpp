@@ -127,54 +127,6 @@ void buildShapeModel(const char* datalist, const int referenceindex, const char*
 	ModelBuilderType::Pointer pcaModelBuilder = ModelBuilderType::New();
 	StatisticalModelType::Pointer model = pcaModelBuilder->BuildNewModel(dataManager->GetSampleDataStructure(), 0);
 	model->Save(modelname);
-
-	//Generate point variance.
-	MeshType::Pointer meanMesh = model->DrawMean();
-	km::assigneMesh<MeshType>( meanMesh, 0.0 );
-
-	StatisticalModelType::MatrixType basisMatrix = model->GetPCABasisMatrix();
-	
-	typedef MeshType::PointsContainer PointsContainerType;
-	PointsContainerType::Pointer points = meanMesh->GetPoints();
-	PointsContainerType::Iterator pointIterator= points->Begin();
-	unsigned id = 0;
-	double maxVariance = 0.0;
-	while( pointIterator != points->End() ) 
-	{
-		double pointVarianceAllComponent = 0.0;
-		for (unsigned p=0;p<model->GetNumberOfPrincipalComponents();p++)
-		{
-			double pointVarianceOneComponent = 0.0;
-			for (unsigned d = 0; d < Dimensions; d++) 
-			{
-				unsigned idx = representer->MapPointIdToInternalIdx(id, d);
-				pointVarianceOneComponent += basisMatrix[idx][p]*basisMatrix[idx][p];
-			}
-			pointVarianceAllComponent += pointVarianceOneComponent;
-		}
-
-		double pointVarianceMeanComponent = pointVarianceAllComponent /= static_cast<double>(model->GetNumberOfPrincipalComponents());
-		meanMesh->SetPointData( pointIterator.Index(), pointVarianceMeanComponent );
-
-		if (pointVarianceMeanComponent > maxVariance)
-		{
-			maxVariance = pointVarianceMeanComponent;
-		}
-
-		++pointIterator;
-		++id;
-	}
-
-	pointIterator = points->Begin();
-	while( pointIterator != points->End() ) 
-	{
-		float variance;
-		meanMesh->GetPointData(pointIterator.Index(), &variance);
-		meanMesh->SetPointData(pointIterator.Index(), variance/maxVariance);
-		++pointIterator;
-	}
-
-	km::writeMesh<MeshType>( "varianceMap.vtk", meanMesh );
 }
 
 int main(int argc, char* argv[]) {

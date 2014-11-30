@@ -54,7 +54,12 @@ namespace km
 	static PROCESS_PHASE g_phase;
 	static std::vector<std::pair<double, double>> g_liverThresholds;
 	static itk::Point<double> g_liverCentroid;
+	static std::map<int, double> g_varianceMap;
+	static std::map<int, double> g_fittingErrorMap;
+	
 	static double g_shape_penalty = 0.0;
+	static double g_fitting_error_threshold = 0.6;
+	static bool   g_disable_abnormal = true;
 
 	std::string category2string(PROFILE_CATEGORY category)
 	{
@@ -96,6 +101,17 @@ namespace km
 						getline (myfile,line);
 						g_shape_penalty = atof( line.c_str() );
 					}
+					else if (line == "#fitting_error_threshold")
+					{
+						getline (myfile,line);
+						g_fitting_error_threshold = atof( line.c_str() );
+					}
+					else if (line == "#disable_abnormal")
+					{
+						getline (myfile,line);
+						double val = atof(line.c_str());
+						g_disable_abnormal = val>0?true:false;
+					}
 				}
 
 				myfile.close();
@@ -110,7 +126,9 @@ namespace km
 			std::cerr<<"Unable to open configuration file: "<<filename<<std::endl;
 		}
 
-		std::cout<<"g_shape_penalty: "<<g_shape_penalty<<std::endl;
+		std::cout<<"shape_penalty: "<<g_shape_penalty<<std::endl;
+		std::cout<<"fitting_error_threshold: "<<g_fitting_error_threshold<<std::endl;
+		std::cout<<"diable_abnormal: "<<g_disable_abnormal<<std::endl;
 	}
 }
 

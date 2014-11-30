@@ -81,7 +81,6 @@ int main(int argc, char* argv[])
 				 <<" geoFile"
 				 <<" atlasImageFile"
 				 <<" configFile"
-				 <<" varianceMapFile"
 				 <<std::endl;
 		return -1;
 	}
@@ -97,7 +96,6 @@ int main(int argc, char* argv[])
 	const char* geoFile = argv[paramidx++];
 	const char* atlasImageFile = argv[paramidx++];
 	const char* configFile = argv[paramidx++];
-	const char* varianceMapFile = argv[paramidx++];
 
 	std::cout<<"** input image                 : " << inputImageFile << std::endl;
 	std::cout<<"** SSM file                    : " << SSMFile << std::endl;
@@ -108,7 +106,6 @@ int main(int argc, char* argv[])
 	std::cout<<"** geometry file               : " << geoFile << std::endl;
 	std::cout<<"** atlas image                 : " << atlasImageFile << std::endl;
 	std::cout<<"** config file                 : " <<configFile<<std::endl;
-	std::cout<<"** variance map                : " <<varianceMapFile<<std::endl;
 
 	typedef km::MeshType MeshType;
 	typedef km::NotifierImp<MeshType> NotifierType;
@@ -130,8 +127,7 @@ int main(int argc, char* argv[])
 			  adaboostSegmentFile,
 			  geoFile,
 			  atlasImageFile,
-			  configFile,
-			  varianceMapFile);
+			  configFile);
 
 	/*
 	std::stringstream ss;

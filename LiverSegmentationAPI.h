@@ -88,8 +88,7 @@ namespace km
 		const char* adaboostSegmentFile,
 		const char* geoFile,
 		const char* atlasImageFile,
-		const char* configFile,
-		const char* varianceMap);
+		const char* configFile);
 
 }
 
