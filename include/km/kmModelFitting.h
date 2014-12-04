@@ -232,80 +232,6 @@ namespace km
 		return paradiff;
 	}
 
-	//template<class ClassifiedPointsKdTreeType, class MeshType>
-	//void
-	//	generateBestPointSet2(
-	//	typename ClassifiedPointsKdTreeType* classifiedKdTree, 
-	//	typename MeshType* outputMesh,
-	//	const typename MeshType* liverMesh)
-	//{
-	//	typedef MeshType::GeometryMapType GeometryMapType;
-	//	typedef GeometryMapType::Iterator GeometryMapIterator;
-	//	typedef MeshType::PointType PointType;
-	//	typedef PointType::VectorType VectorType;
-
-	//	km::assigneMesh<MeshType>(outputMesh, 0.0);
-
-	//	GeometryMapIterator geoIt = liverMesh->GetGeometryData()->Begin();
-	//	GeometryMapIterator geoItEnd = liverMesh->GetGeometryData()->End();
-
-	//	itk::SimplexMeshGeometry *geodata;
-	//	while (geoIt!=geoItEnd)
-	//	{
-	//		int idx = geoIt.Index();
-	//		geodata = geoIt.Value();
-
-	//		VectorType normal;
-	//		normal.Set_vnl_vector(geodata->normal.Get_vnl_vector());
-
-	//		PointType curPoint = liverMesh->GetPoint(idx);
-	//		PointType closedBoundaryPoint;
-
-	//		//std::cout<<"Find closest bounday point for: "<<idx<<std::endl;
-	//		bool found = classifiedKdTree->FindClosetBoundaryPoint(closedBoundaryPoint, curPoint, idx);
-
-	//		double offset = 0.0;
-	//		if (found)
-	//		{
-	//			VectorType shiftVec = closedBoundaryPoint - curPoint;
-	//			offset = shiftVec*normal;
-	//		}
-
-	//		if (isAbnormal(idx))
-	//		{
-	//			offset = offset>0?-1.0:1.0;
-	//		}
-
-	//		outputMesh->SetPointData(idx, offset);
-
-	//		geoIt++;
-	//	}
-
-	//	//Remove noise point.
-	//	km::smoothMeshData<MeshType>(outputMesh, 0);
-
-	//	geoIt = liverMesh->GetGeometryData()->Begin();
-	//	geoItEnd = liverMesh->GetGeometryData()->End();
-
-	//	while (geoIt!=geoItEnd)
-	//	{
-	//		unsigned int idx = geoIt.Index();
-	//		geodata = geoIt.Value();
-
-	//		VectorType normal;
-	//		normal.Set_vnl_vector(geodata->normal.Get_vnl_vector());
-
-	//		double offsetVal = 0.0;
-	//		outputMesh->GetPointData(idx, &offsetVal);
-
-	//		PointType oldPos = liverMesh->GetPoint(idx);
-	//		outputMesh->SetPoint(idx, oldPos + normal*offsetVal);
-
-	//		geoIt++;
-	//	}
-
-	//}
-
 	template<class ClassifiedPointsKdTreeType, class ProfileExtractorType, class FloatImageType, class MeshType>
 	void
 		deformByLiverClassification(
@@ -344,50 +270,84 @@ namespace km
 			normal.Set_vnl_vector(geodata->normal.Get_vnl_vector());
 
 			double best_offset = 0.0;
-			if (isAbnormal(idx))
+
+			PointType closestBoundaryPoint;
+			//bool foundBoundary = classifiedKdTree->FindClosestBoundaryPoint(closestBoundaryPoint, mpoint, idx);
+			bool foundBoundary = classifiedKdTree->FindFirstBoundaryPoint(closestBoundaryPoint, mpoint, geodata, idx, 1.0);
+			foundBoundary = false;
+
+			PointType closestNextRegionPoint;
+			//bool foundNextRegion = classifiedKdTree->FindClosestNextRegionPoint(closestNextRegionPoint, mpoint, idx);
+			bool foundNextRegion = true;
+			classifiedKdTree->FindNextRegionPoint(closestNextRegionPoint, mpoint, geodata, idx, 1.0);
+
+			double distToBoundary = itk::NumericTraits<double>::max();
+			if (foundBoundary)
 			{
-				//std::cout<<"Find closest bounday point for: "<<idx<<std::endl;
-				PointType closedBoundaryPoint;
-				bool found = classifiedKdTree->FindClosetBoundaryPoint(closedBoundaryPoint, mpoint, idx);
-				if (found)
-				{
-					VectorType shiftVec = closedBoundaryPoint - mpoint;
-					best_offset = shiftVec*normal;
-				}
+				distToBoundary = closestBoundaryPoint.EuclideanDistanceTo(mpoint);
+			}
+
+			double distToNextRegion = itk::NumericTraits<double>::max();
+			if (foundNextRegion)
+			{
+				distToNextRegion = closestNextRegionPoint.EuclideanDistanceTo(mpoint);
+			}
+
+			if (distToBoundary <= foundNextRegion)
+			{
+				VectorType vec = closestBoundaryPoint - mpoint;
+				best_offset = dot_product(vec.GetVnlVector(), normal.GetVnlVector());
 			}
 			else
 			{
-				double maxDist = g_varianceMap[idx];
-				double direction = 1.0;
-				unsigned int searchedPoints = 1;
-				while(searchedPoints<=maxSearchPoints && std::abs(best_offset)<=maxDist)
-				{
-					PointType pttest = mpoint + normal*best_offset;
-					double tmpDirection = -1.0;
-					if (profileExtractor->isInsideBuffer(pttest))
-					{
-						std::vector<FLOATTYPE> feature;
-						profileExtractor->extractFeatureSet(feature, classifier->profile_category, geodata, pttest);
-
-						tmpDirection = 2.0*classifier->classify(feature,idx) - 1.0;
-					}
-					best_offset += tmpDirection * searchStep;
-					if (searchedPoints == 1)
-					{
-						direction = tmpDirection>0?1.0:-1.0;
-					}
-					else if (tmpDirection*direction<0) //Change direction. Break from here.
-					{
-						break;
-					}
-					searchedPoints++;
-				}
+				VectorType vec = closestNextRegionPoint - mpoint;
+				best_offset = dot_product(vec.GetVnlVector(), normal.GetVnlVector());
 			}
 
-			if (isAbnormal(idx))
-			{
-				best_offset = best_offset>0?-1.0*searchStep:searchStep;
-			}
+			//if ( false )
+			//{
+			//	//std::cout<<"Find closest bounday point for: "<<idx<<std::endl;
+			//	PointType closedBoundaryPoint;
+			//	bool found = classifiedKdTree->FindClosestBoundaryPoint(closedBoundaryPoint, mpoint, idx);
+			//	if (found)
+			//	{
+			//		VectorType shiftVec = closedBoundaryPoint - mpoint;
+			//		best_offset = shiftVec*normal;
+			//	}
+			//}
+			//else
+			//{
+			//	double maxDist = g_varianceMap[idx];
+			//	double direction = 1.0;
+			//	unsigned int searchedPoints = 1;
+			//	while(searchedPoints<=maxSearchPoints && std::abs(best_offset)<=maxDist)
+			//	{
+			//		PointType pttest = mpoint + normal*best_offset;
+			//		double tmpDirection = -1.0;
+			//		if (profileExtractor->isInsideBuffer(pttest))
+			//		{
+			//			std::vector<FLOATTYPE> feature;
+			//			profileExtractor->extractFeatureSet(feature, classifier->profile_category, geodata, pttest);
+
+			//			tmpDirection = 2.0*classifier->classify(feature,idx) - 1.0;
+			//		}
+			//		best_offset += tmpDirection * searchStep;
+			//		if (searchedPoints == 1)
+			//		{
+			//			direction = tmpDirection>0?1.0:-1.0;
+			//		}
+			//		else if (tmpDirection*direction<0) //Change direction. Break from here.
+			//		{
+			//			break;
+			//		}
+			//		searchedPoints++;
+			//	}
+			//}
+
+			//if (isAbnormal(idx))
+			//{
+			//	best_offset = best_offset>0?-1.0*searchStep:searchStep;
+			//}
 
 			outputMesh->SetPointData(idx, best_offset);
 

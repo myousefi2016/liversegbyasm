@@ -241,7 +241,7 @@ namespace km
 				{
 					ipoint_inside -= normal*SHIFT_INSIDE;
 
-					/*****************Plain*****************/
+					//Plain
 					profileExtractor.extractFeatureSet(features, profileUnitPlain.category, geodata, ipoint_inside);
 
 					profileUnitPlain.sampleFile << IPClass;
@@ -251,7 +251,7 @@ namespace km
 					}
 					profileUnitPlain.sampleFile << " " << std::endl;
 
-					/*****************Liver*****************/
+					//Liver
 					profileExtractor.extractFeatureSet(features, profileUnitLiver.category, geodata, ipoint_inside);
 
 					profileUnitLiver.sampleFile << IPClass;
@@ -261,7 +261,7 @@ namespace km
 					}
 					profileUnitLiver.sampleFile << " " << std::endl;
 
-					/*****************Boundary*****************/
+					//Boundary
 					profileExtractor.extractFeatureSet(features, profileUnitBoundary.category, geodata, ipoint_inside);
 
 					profileUnitBoundary.sampleFile << IPClass;
@@ -273,12 +273,12 @@ namespace km
 				}
 
 				//提取当前位置的Profile
-				OriginalImageType::PointType ipoint_boundary = ipoint;
+				OriginalImageType::PointType ipoint_boundary = ipoint - normal*SHIFT_BOUNDARY;
 				for (int ttt=0;ttt<NUMBER_OF_BOUNDARY_PER_POINT;ttt++)
 				{
-					//ipoint_boundary += normal*((float)rand()/RAND_MAX)*0.25;
+					ipoint_boundary = ipoint; //+= normal*(SHIFT_BOUNDARY*2/(NUMBER_OF_BOUNDARY_PER_POINT-1));
 
-					/*****************Plain*****************/
+					//Plain
 					profileExtractor.extractFeatureSet(features, profileUnitPlain.category, geodata, ipoint_boundary);
 
 					profileUnitPlain.sampleFile << BPClass;
@@ -288,7 +288,7 @@ namespace km
 					}
 					profileUnitPlain.sampleFile << " " << std::endl;
 
-					/*****************Boundary*****************/
+					//Boundary
 					profileExtractor.extractFeatureSet(features, profileUnitBoundary.category, geodata, ipoint_boundary);
 
 					profileUnitBoundary.sampleFile << BPClass;
@@ -297,6 +297,16 @@ namespace km
 						profileUnitBoundary.sampleFile << " " << features[i];
 					}
 					profileUnitBoundary.sampleFile << " " << std::endl;
+
+					//Coordinate
+					profileExtractor.extractFeatureSet(features, profileUnitCoordinate.category, geodata, ipoint_boundary);
+
+					profileUnitCoordinate.sampleFile << BPClass;
+					for (int i=0;i<features.size();i++)
+					{
+						profileUnitCoordinate.sampleFile << " " << features[i];
+					}
+					profileUnitCoordinate.sampleFile << " " << std::endl;
 				}
 
 				//提取向法线外部方向shift后的位置的Profile
@@ -306,7 +316,7 @@ namespace km
 					//提取向法线内部方向shift后的位置的Profile
 					ipoint_outside += normal*SHIFT_OUTSIDE;
 
-					/*****************Plain*****************/
+					//Plain
 					profileExtractor.extractFeatureSet(features, profileUnitPlain.category, geodata, ipoint_outside);
 
 					profileUnitPlain.sampleFile << OPClass;
@@ -316,7 +326,7 @@ namespace km
 					}
 					profileUnitPlain.sampleFile << " " << std::endl;
 
-					/*****************Liver*****************/
+					//Liver
 					profileExtractor.extractFeatureSet(features, profileUnitLiver.category, geodata, ipoint_outside);
 
 					profileUnitLiver.sampleFile << OPClass;
@@ -326,7 +336,7 @@ namespace km
 					}
 					profileUnitLiver.sampleFile << " " << std::endl;
 
-					/*****************Boundary*****************/
+					//Boundary
 					profileExtractor.extractFeatureSet(features, profileUnitBoundary.category, geodata, ipoint_outside);
 
 					profileUnitBoundary.sampleFile << OPClass;
@@ -347,27 +357,6 @@ namespace km
 		profileUnitLiver.closeTxtSteam();
 		profileUnitBoundary.closeTxtSteam();
 		profileUnitCoordinate.closeTxtSteam();
-
-		////Output coordinate sample.
-		////Write profiles.
-		//km::KNNProfileClassifier knnClassifierCoordinate;
-		//knnClassifierCoordinate.setShapeNumber(numberOfData);
-		//knnClassifierCoordinate.setShapePointsNumber(numberOfPoints);
-		//knnClassifierCoordinate.loadSamples( profileUnitCoordinate.sampleTxtFilename );
-		////knnClassifierCoordinate.autoWeight();
-		//knnClassifierCoordinate.cluster(9);
-		//knnClassifierCoordinate.save( profileUnitCoordinate.sampleHd5Filename );
-		//{
-		//	km::assigneMesh<SimplexMeshType>( reflivermesh, 0.0 );
-		//	for (int pid=0;pid<reflivermesh->GetNumberOfPoints();pid++)
-		//	{
-		//		reflivermesh->SetPointData( pid, knnClassifierCoordinate.cluster_labels[pid][0] );
-		//	}
-
-		//	std::stringstream ss;
-		//	ss << outputdir << "\\ClusteredMeshCoordinate.vtk";
-		//	km::writeMesh<SimplexMeshType>( ss.str().c_str(), reflivermesh );
-		//}
 
 		//Output plain sample.
 		//Write profiles.
@@ -411,6 +400,26 @@ namespace km
 
 			std::stringstream ss;
 			ss << outputdir << "\\ErrorMap_Liver.vtk";
+			km::writeMesh<SimplexMeshType>( ss.str().c_str(), reflivermesh );
+		}
+
+		//Output coordinate sample.
+		//Write profiles.
+		km::KNNProfileClassifier knnClassifierCoordinate;
+		knnClassifierCoordinate.setShapeNumber(numberOfData);
+		knnClassifierCoordinate.setShapePointsNumber(numberOfPoints);
+		knnClassifierCoordinate.loadSamples( profileUnitCoordinate.sampleTxtFilename );
+		knnClassifierCoordinate.cluster(9);
+		knnClassifierCoordinate.save( profileUnitCoordinate.sampleHd5Filename );
+		{
+			km::assigneMesh<SimplexMeshType>( reflivermesh, 0.0 );
+			for (int pid=0;pid<reflivermesh->GetNumberOfPoints();pid++)
+			{
+				reflivermesh->SetPointData( pid, knnClassifierCoordinate.cluster_labels[pid][0] );
+			}
+
+			std::stringstream ss;
+			ss << outputdir << "\\ClusteredMeshCoordinate.vtk";
 			km::writeMesh<SimplexMeshType>( ss.str().c_str(), reflivermesh );
 		}
 

@@ -7,15 +7,14 @@
 #include <map>
 
 static double SIGMA = 2.0; //采样梯度profile时，计算梯度场采样的参数sigma
-static int NEIGHBOR_RADIUS = 1;
 static int PROFILE_DIM = 9;
 static double PROFILE_SPACING = 1.5; //毫米 PROFILE_LENTH/(PROFILE_DIM-1)
-static double PROFILE_INSIDE_RATIO = 0.8;
 static double SHIFT_INSIDE = 3.0; //采样表面内profile时，样本从表面上向表面内偏移的距离
 static double SHIFT_OUTSIDE = 3.0; //采样表面外profile时，样本从表面上向表面外偏移的距离
+static double SHIFT_BOUNDARY = 1.0;
 static int NUMBER_OF_INSIDE_PER_POINT = 3; // 在每个MESH点附近采样inside profile的数量。
 static int NUMBER_OF_BOUNDARY_PER_POINT = 1; // 在每个MESH点附近采样boundary profile的数量。
-static int NUMBER_OF_OUTSIDE_PER_POINT = 5; // 在每个MESH点附近采样outside profile的数量。
+static int NUMBER_OF_OUTSIDE_PER_POINT = 3; // 在每个MESH点附近采样outside profile的数量。
 //#define NUMBER_OF_PROFILE_PER_POINT (NUMBER_OF_INSIDE_PER_POINT+NUMBER_OF_BOUNDARY_PER_POINT+NUMBER_OF_OUTSIDE_PER_POINT)
 
 #define RESAMPLE_SPACING 2.0

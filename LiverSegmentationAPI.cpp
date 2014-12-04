@@ -486,6 +486,7 @@ namespace km
 			typedef km::ClassifiedPointsKdTree<MeshType, ProfileExtractorType> ClassifiedPointsKdTreeType;
 			ClassifiedPointsKdTreeType classifiedPointsTree;
 			classifiedPointsTree.SetBoundaryClassifier(&ProfileClassifier_Boundary);
+			classifiedPointsTree.SetRegionClassifier(&ProfileClassifier_Liver);
 			classifiedPointsTree.SetProfileExtractor(&profileExtractor);
 
 			while ( flagLooping )
@@ -494,11 +495,17 @@ namespace km
 
 				g_liverCentroid.CastFrom(km::getMeshCentroid<MeshType>(fittedMesh));
 
-				if (iter_ellapsed%2 == 0)
-				{
-					KM_DEBUG_INFO("Update boundary tree...");
-					classifiedPointsTree.UpdateBoundaryTree(fittedMesh);
-				}
+				//if (iter_ellapsed%2 == 0)
+				//{
+				//	KM_DEBUG_INFO("Update region tree...");
+				//	classifiedPointsTree.UpdateRegionTree(fittedMesh);
+				//}
+
+				//if (iter_ellapsed%2 == 1)
+				//{
+				//	KM_DEBUG_INFO("Update boundary tree...");
+				//	classifiedPointsTree.UpdateBoundaryTree(fittedMesh);
+				//}
 
 				deformByLiverClassification<ClassifiedPointsKdTreeType, ProfileExtractorType, FloatImageType, MeshType>
 					( &ProfileClassifier_Liver, &classifiedPointsTree, &profileExtractor, bestMesh, fittedMesh, 1.5, 20);
