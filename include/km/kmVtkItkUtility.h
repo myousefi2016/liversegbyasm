@@ -6,15 +6,15 @@
 #include <string>
 #include <set>
 
-#include <itkSimplexMesh.h>
-#include <vtkPolyData.h>
+#include "itkSimplexMesh.h"
+#include "vtkPolyData.h""
 #include "itkLineCell.h"
 #include "itkTriangleCell.h"
 #include "vtkPoints.h"
 #include "vtkCellArray.h"
 
-#include <itkIdentityTransform.h>
-#include <itkTransformMeshFilter.h>
+#include "itkIdentityTransform.h"
+#include "itkTransformMeshFilter.h"
 
 #include "itkAdaptSimplexMesh3DFilter.h"
 
@@ -734,6 +734,13 @@ namespace km
 			data->normal = normal;
 			data->pos = allpoints->GetElement( dataIt.Index() );
 
+			data->neighborDirections[0] = data->neighbors[0] - data->pos;
+			data->neighborDirections[0].Normalize();
+			data->neighborDirections[1] = data->neighbors[0] - data->pos;
+			data->neighborDirections[1].Normalize();
+			data->neighborDirections[2] = data->neighbors[0] - data->pos;
+			data->neighborDirections[2].Normalize();
+
 			// compute the simplex angle
 			data->ComputeGeometry();
 
@@ -801,6 +808,21 @@ namespace km
 		adaptorFilter->SetGamma( m_Gamma );
 		adaptorFilter->SetTangentFactor( 0.8 );
 		adaptorFilter->SetNormalFactor( 0.2 );
+		adaptorFilter->SetRigidity( 1 );
+		adaptorFilter->SetIterations( m_Iterations );
+		adaptorFilter->Update(); //This is just for initialization.
+	}
+
+	template<class MeshType>
+	void
+		smoothMesh(typename MeshType* inputMesh, double factor, unsigned int m_Iterations)
+	{
+		typedef itk::AdaptSimplexMesh3DFilter<MeshType, MeshType> AdaptSimplexMesh3DFilterType;
+		AdaptSimplexMesh3DFilterType::Pointer adaptorFilter = AdaptSimplexMesh3DFilterType::New();
+		adaptorFilter->SetInput( inputMesh );
+		adaptorFilter->SetGamma( 0.0 );
+		adaptorFilter->SetTangentFactor( 0.0 );
+		adaptorFilter->SetNormalFactor( factor );
 		adaptorFilter->SetRigidity( 1 );
 		adaptorFilter->SetIterations( m_Iterations );
 		adaptorFilter->Update(); //This is just for initialization.

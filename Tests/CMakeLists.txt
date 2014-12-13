@@ -32,17 +32,20 @@ SET(CMAKE_VERBOSE_MAKEFILE ON)
 #add_executable (testImageToImageElasticRegistration testImageToImageElasticRegistration.cpp)
 #target_link_libraries (testImageToImageElasticRegistration  ${ITK_LIBRARIES} ${VTK_LIBRARIES})
 
-#add_executable (TestDeformSeg TestDeformSeg.cpp)
-#target_link_libraries (TestDeformSeg  ${ITK_LIBRARIES} ${VTK_LIBRARIES})
+add_executable (testTemp testTemp.cpp)
+target_link_libraries (testTemp  ${ITK_LIBRARIES} ${VTK_LIBRARIES})
 
-#add_executable (DeformableModel1 DeformableModel1.cpp)
-#target_link_libraries (DeformableModel1  ${ITK_LIBRARIES} ${VTK_LIBRARIES})
+add_executable (testProfileClustering testProfileClustering.cpp)
+target_link_libraries (testProfileClustering  ${ITK_LIBRARIES} ${VTK_LIBRARIES})
 
-#add_executable (TestKNNClassifer TestKNNClassifer.cpp ${ANN_SRC})
-#target_link_libraries (TestKNNClassifer ${LiverSegSSM_LIRARIES} ${ITK_LIBRARIES} ${VTK_LIBRARIES})
+add_executable (testProfileClassifer testProfileClassifer.cpp ${ANN_SRC})
+target_link_libraries (testProfileClassifer ${LiverSegSSM_LIRARIES} ${ITK_LIBRARIES} ${VTK_LIBRARIES})
 
-add_executable (TestAdaboostClassifer TestAdaboostClassifer.cpp ${ANN_SRC})
-target_link_libraries (TestAdaboostClassifer ${LiverSegSSM_LIRARIES} ${ITK_LIBRARIES} ${VTK_LIBRARIES})
+add_executable (testNoCrossDeform testNoCrossDeform.cpp ${ANN_SRC})
+target_link_libraries (testNoCrossDeform ${LiverSegSSM_LIRARIES} ${ITK_LIBRARIES} ${VTK_LIBRARIES})
 
-add_executable (TestComposedFitting TestComposedFitting.cpp ${ANN_SRC})
-target_link_libraries (TestComposedFitting ${LiverSegSSM_LIRARIES} ${ITK_LIBRARIES} ${VTK_LIBRARIES})
+add_executable (testSSM testSSM.cpp ${ANN_SRC})
+target_link_libraries (testSSM ${LiverSegSSM_LIRARIES} ${ITK_LIBRARIES} ${VTK_LIBRARIES})
+
+add_executable (testProfileContainer testProfileContainer.cpp ${ANN_SRC})
+target_link_libraries (testProfileContainer ${LiverSegSSM_LIRARIES} ${ITK_LIBRARIES} ${VTK_LIBRARIES})

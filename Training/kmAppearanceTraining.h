@@ -15,13 +15,14 @@
 #include "itkTimeProbesCollectorBase.h"
 #include "itkMemoryProbesCollectorBase.h"
 
+#include "kmProfileContainer.h"
 #include "kmProfileClassifier.h"
 #include "kmProfileExtractor.h"
 #include "kmUtility.h"
 #include "kmVtkItkUtility.h"
 #include "kmProcessing.h"
 
-#define KMeansFlag 0
+#define EXTRACT_FLAG true
 
 using namespace std;
 using std::ostream;
@@ -68,45 +69,48 @@ namespace km
 		{
 			category = category_;
 			std::stringstream ss0;
-			ss0 << outputdir << "\\samples_" << category2string(category_) << ".txt";
+			ss0 << outputdir << "\\samples_" << ProfileCategoryUtils::category2string(category_) << ".txt";
 			sprintf(sampleTxtFilename, "%s", ss0.str().c_str());
 
 			ss0.str( "" );
 			ss0.clear();
 
-			ss0 << outputdir << "\\samples_" << category2string(category_) << ".h5";
+			ss0 << outputdir << "\\samples_" << ProfileCategoryUtils::category2string(category_) << ".h5";
 			sprintf(sampleHd5Filename, "%s", ss0.str().c_str());
 
 			ss0.str( "" );
 			ss0.clear();
 
-			ss0 << outputdir << "\\AdaboostClassifier_" << category2string(category_) << ".h5";
+			ss0 << outputdir << "\\AdaboostClassifier_" << ProfileCategoryUtils::category2string(category_) << ".h5";
 			sprintf(classifierHd5FileName, "%s", ss0.str().c_str());
 		}
 
 		~ProfileUnit()
 		{
-			std::cout<<"De-constructor of ProfileUnit.."<<std::endl;
-			//delete[] sampleTxtFilename;
-			//delete[] sampleHd5Filename;
-			//delete[] classifierHd5FileName;
-			std::cout<<"De-constructor end.."<<std::endl;
 		}
 
 		void openTxtStream()
 		{
-			if (!sampleFile.is_open())
-			{
+			if (!sampleFile.is_open()){
 				sampleFile.open (sampleTxtFilename, std::ofstream::out | std::ofstream::app);
 			}
 		}
 
 		void closeTxtSteam()
 		{
-			if (sampleFile.is_open())
-			{
+			if (sampleFile.is_open()){
 				sampleFile.close();
 			}
+		}
+
+		void writeLine(int pointID, int classLabel, const std::vector<FLOATTYPE>& features)
+		{
+			sampleFile << pointID << " " << classLabel;
+			for (int k=0;k<features.size();k++)
+			{
+				sampleFile << " " << features[k];
+			}
+			sampleFile << " " << std::endl;
 		}
 	};
 	
@@ -114,15 +118,13 @@ namespace km
 		const char* origlistfile,
 		const char* meshlistfile,
 		const char* referencegeometryfile,
-		const char* outputdir/*,
-		PROFILE_CATEGORY profile_category*/)
+		const char* outputdir)
 	{
 		KM_DEBUG_INFO( "======================================" );
 		KM_DEBUG_PRINT( "original image list", origlistfile );
 		KM_DEBUG_PRINT( "shape mesh list", meshlistfile );
 		KM_DEBUG_PRINT( "reference geometry", referencegeometryfile );
 		KM_DEBUG_PRINT( "output directory", outputdir );
-		//KM_DEBUG_PRINT( "profile category", category2string(profile_category) );
 
 		srand(time(0));
 
@@ -149,18 +151,7 @@ namespace km
 			return EXIT_FAILURE;
 		}
 
-		ProfileUnit profileUnitPlain(PLAIN, outputdir);
-		ProfileUnit profileUnitLiver(LIVER, outputdir);
-		ProfileUnit profileUnitBoundary(BOUNDARY, outputdir);
-		ProfileUnit profileUnitCoordinate(COORDINATE, outputdir);
-
-		profileUnitPlain.openTxtStream();
-		profileUnitLiver.openTxtStream();
-		profileUnitBoundary.openTxtStream();
-		profileUnitCoordinate.openTxtStream();
-
 		int refidx = 1;
-
 		refidx = std::min( numberOfData-1, refidx );
 
 		SimplexMeshType::Pointer reflivermesh = km::readMesh<SimplexMeshType>( shapeMeshFileNamesList[refidx] );
@@ -173,13 +164,21 @@ namespace km
 		const unsigned int numberOfPoints = reflivermesh->GetNumberOfPoints();
 		KM_DEBUG_PRINT( "Number of Points ", numberOfPoints );
 
+		ProfileUnit profileUnitPlain(PLAIN, outputdir);
+		ProfileUnit profileUnitLiver(LIVER, outputdir);
+		ProfileUnit profileUnitBoundary(BOUNDARY, outputdir);
+		ProfileUnit profileUnitCoordinate(COORDINATE, outputdir);
+		profileUnitPlain.openTxtStream();
+		profileUnitLiver.openTxtStream();
+		profileUnitBoundary.openTxtStream();
+		profileUnitCoordinate.openTxtStream();
+
 		for (unsigned int i=0;i<numberOfData;i++)
 		{
 			KM_DEBUG_PRINT("Start to extract appearance: ", i+1);
 
 			SimplexMeshType::Pointer livermesh = km::readMesh<SimplexMeshType>( shapeMeshFileNamesList[i] );
 			km::loadSimplexMeshGeometryData<SimplexMeshType>(geometryImage, livermesh);
-
 			km::ComputeGeometry<SimplexMeshType>( livermesh, true );
 
 			g_liverCentroid.CastFrom(km::getMeshCentroid<SimplexMeshType>( livermesh ));
@@ -211,7 +210,6 @@ namespace km
 			}
 
 			//KM_DEBUG_INFO( "Estimate liver threshold value DONE!" );
-
 			km::ProfileExtractor<OriginalImageType> profileExtractor;
 			profileExtractor.setImage(origimage);
 			profileExtractor.enableCache(false);
@@ -233,118 +231,69 @@ namespace km
 				VectorType normal;
 				normal.Set_vnl_vector(geodata->normal.Get_vnl_vector());
 
-				std::vector<double> features;
+				std::vector<PointType> points_inside;
+				std::vector<PointType> points_boundary;
+				std::vector<PointType> points_outside;
+				for (int t=1;t<=NUMBER_OF_INSIDE_PER_POINT;t++){
+					points_inside.push_back(ipoint-normal*SHIFT_INSIDE*t);
+				}
+				for (int t=0;t<NUMBER_OF_BOUNDARY_PER_POINT;t++){
+					points_boundary.push_back(ipoint+normal*((rand()%10-5.0)/10.0)*SHIFT_BOUNDARY);
+				}
+				for (int t=1;t<=NUMBER_OF_OUTSIDE_PER_POINT;t++){
+					points_outside.push_back(ipoint+normal*SHIFT_OUTSIDE*t);
+				}
 
+				std::vector<FLOATTYPE> features;
 				//提取向法线内部方向shift后的位置的Profile
-				OriginalImageType::PointType ipoint_inside = ipoint;
-				for (int ttt=0;ttt<NUMBER_OF_INSIDE_PER_POINT;ttt++)
+				for (int t=0;t<points_inside.size();t++)
 				{
-					ipoint_inside -= normal*SHIFT_INSIDE;
-
-					//Plain
-					profileExtractor.extractFeatureSet(features, profileUnitPlain.category, geodata, ipoint_inside);
-
-					profileUnitPlain.sampleFile << IPClass;
-					for (int i=0;i<features.size();i++)
-					{
-						profileUnitPlain.sampleFile << " " << features[i];
-					}
-					profileUnitPlain.sampleFile << " " << std::endl;
+					PointType ipoint_inside = points_inside[t];
 
 					//Liver
 					profileExtractor.extractFeatureSet(features, profileUnitLiver.category, geodata, ipoint_inside);
-
-					profileUnitLiver.sampleFile << IPClass;
-					for (int i=0;i<features.size();i++)
-					{
-						profileUnitLiver.sampleFile << " " << features[i];
-					}
-					profileUnitLiver.sampleFile << " " << std::endl;
+					profileUnitLiver.writeLine(idx, IPClass, features);
 
 					//Boundary
 					profileExtractor.extractFeatureSet(features, profileUnitBoundary.category, geodata, ipoint_inside);
+					profileUnitBoundary.writeLine(idx, IPClass, features);
 
-					profileUnitBoundary.sampleFile << IPClass;
-					for (int i=0;i<features.size();i++)
-					{
-						profileUnitBoundary.sampleFile << " " << features[i];
-					}
-					profileUnitBoundary.sampleFile << " " << std::endl;
+					//Plain
+					profileExtractor.extractFeatureSet(features, profileUnitPlain.category, geodata, ipoint_inside);
+					profileUnitPlain.writeLine(idx, IPClass, features);
 				}
 
 				//提取当前位置的Profile
-				OriginalImageType::PointType ipoint_boundary = ipoint - normal*SHIFT_BOUNDARY;
-				for (int ttt=0;ttt<NUMBER_OF_BOUNDARY_PER_POINT;ttt++)
+				for (int t=0;t<points_boundary.size();t++)
 				{
-					ipoint_boundary = ipoint; //+= normal*(SHIFT_BOUNDARY*2/(NUMBER_OF_BOUNDARY_PER_POINT-1));
-
-					//Plain
-					profileExtractor.extractFeatureSet(features, profileUnitPlain.category, geodata, ipoint_boundary);
-
-					profileUnitPlain.sampleFile << BPClass;
-					for (int i=0;i<features.size();i++)
-					{
-						profileUnitPlain.sampleFile << " " << features[i];
-					}
-					profileUnitPlain.sampleFile << " " << std::endl;
+					PointType ipoint_boundary = points_boundary[t];
 
 					//Boundary
 					profileExtractor.extractFeatureSet(features, profileUnitBoundary.category, geodata, ipoint_boundary);
+					profileUnitBoundary.writeLine(idx, BPClass, features);
 
-					profileUnitBoundary.sampleFile << BPClass;
-					for (int i=0;i<features.size();i++)
-					{
-						profileUnitBoundary.sampleFile << " " << features[i];
-					}
-					profileUnitBoundary.sampleFile << " " << std::endl;
+					//Plain
+					profileExtractor.extractFeatureSet(features, profileUnitPlain.category, geodata, ipoint_boundary);
+					profileUnitPlain.writeLine(idx, BPClass, features);
 
 					//Coordinate
 					profileExtractor.extractFeatureSet(features, profileUnitCoordinate.category, geodata, ipoint_boundary);
-
-					profileUnitCoordinate.sampleFile << BPClass;
-					for (int i=0;i<features.size();i++)
-					{
-						profileUnitCoordinate.sampleFile << " " << features[i];
-					}
-					profileUnitCoordinate.sampleFile << " " << std::endl;
+					profileUnitCoordinate.writeLine(idx, BPClass, features);
 				}
 
 				//提取向法线外部方向shift后的位置的Profile
-				OriginalImageType::PointType ipoint_outside = ipoint;
-				for (int ttt=0;ttt<NUMBER_OF_OUTSIDE_PER_POINT;ttt++)
+				for (int t=0;t<points_outside.size();t++)
 				{
 					//提取向法线内部方向shift后的位置的Profile
-					ipoint_outside += normal*SHIFT_OUTSIDE;
-
-					//Plain
-					profileExtractor.extractFeatureSet(features, profileUnitPlain.category, geodata, ipoint_outside);
-
-					profileUnitPlain.sampleFile << OPClass;
-					for (int i=0;i<features.size();i++)
-					{
-						profileUnitPlain.sampleFile << " " << features[i];
-					}
-					profileUnitPlain.sampleFile << " " << std::endl;
+					PointType ipoint_outside = points_outside[t];
 
 					//Liver
 					profileExtractor.extractFeatureSet(features, profileUnitLiver.category, geodata, ipoint_outside);
+					profileUnitLiver.writeLine(idx, OPClass, features);
 
-					profileUnitLiver.sampleFile << OPClass;
-					for (int i=0;i<features.size();i++)
-					{
-						profileUnitLiver.sampleFile << " " << features[i];
-					}
-					profileUnitLiver.sampleFile << " " << std::endl;
-
-					//Boundary
-					profileExtractor.extractFeatureSet(features, profileUnitBoundary.category, geodata, ipoint_outside);
-
-					profileUnitBoundary.sampleFile << OPClass;
-					for (int i=0;i<features.size();i++)
-					{
-						profileUnitBoundary.sampleFile << " " << features[i];
-					}
-					profileUnitBoundary.sampleFile << " " << std::endl;
+					//Plain
+					profileExtractor.extractFeatureSet(features, profileUnitPlain.category, geodata, ipoint_outside);
+					profileUnitPlain.writeLine(idx, OPClass, features);
 				}
 
 				geoIt++;
@@ -360,92 +309,60 @@ namespace km
 
 		//Output plain sample.
 		//Write profiles.
-		km::KNNProfileClassifier knnClassifierPlain;
-		knnClassifierPlain.setShapeNumber(numberOfData);
-		knnClassifierPlain.setShapePointsNumber(numberOfPoints);
-		knnClassifierPlain.loadSamples( profileUnitPlain.sampleTxtFilename );
-		knnClassifierPlain.cluster(9);
-		knnClassifierPlain.save( profileUnitPlain.sampleHd5Filename );
+		km::ProfileContainer profilesPlain;
+		profilesPlain.setShapeNumber(numberOfData);
+		profilesPlain.setShapePointsNumber(numberOfPoints);
+		profilesPlain.loadSamples( profileUnitPlain.sampleTxtFilename );
+		profilesPlain.cluster(9);
+		profilesPlain.save( profileUnitPlain.sampleHd5Filename );
 		{
-			km::assigneMesh<SimplexMeshType>( reflivermesh, 0.0 );
-			for (int pid=0;pid<reflivermesh->GetNumberOfPoints();pid++)
-			{
-				reflivermesh->SetPointData( pid, knnClassifierPlain.cluster_labels[pid][0] );
-			}
-
+			km::ProfileContainerUtils<SimplexMeshType>::assignClusterLabels(profilesPlain, reflivermesh);
 			std::stringstream ss;
 			ss << outputdir << "\\ClusteredMeshPlain.vtk";
 			km::writeMesh<SimplexMeshType>( ss.str().c_str(), reflivermesh );
 		}
 
+		////Output coordinate sample.
+		////Write profiles.
+		//km::ProfileContainer profilesCoordinate;
+		//profilesCoordinate.setShapeNumber(numberOfData);
+		//profilesCoordinate.setShapePointsNumber(numberOfPoints);
+		//profilesCoordinate.loadSamples( profileUnitCoordinate.sampleTxtFilename );
+		//profilesCoordinate.cluster(9);
+		//profilesCoordinate.save( profileUnitCoordinate.sampleHd5Filename );
+		//{
+		//	km::ProfileContainerUtils<SimplexMeshType>::assignClusterLabels(profilesCoordinate, reflivermesh);
+		//	std::stringstream ss;
+		//	ss << outputdir << "\\ClusteredMeshCoordinate.vtk";
+		//	km::writeMesh<SimplexMeshType>( ss.str().c_str(), reflivermesh );
+		//}
+
 		//Output liver sample & classifier.
-		km::KNNProfileClassifier knnClassifierLiver;
-		knnClassifierLiver.setShapeNumber(numberOfData);
-		knnClassifierLiver.setShapePointsNumber(numberOfPoints);
-		knnClassifierLiver.loadSamples( profileUnitLiver.sampleTxtFilename );
-		knnClassifierLiver.copyCluster(knnClassifierPlain);
-		knnClassifierLiver.save( profileUnitLiver.sampleHd5Filename );
+		km::ProfileContainer profilesLiver;
+		profilesLiver.setShapeNumber(numberOfData);
+		profilesLiver.setShapePointsNumber(numberOfPoints);
+		profilesLiver.loadSamples( profileUnitLiver.sampleTxtFilename );
+		profilesLiver.copyCluster(profilesPlain);
+		profilesLiver.save( profileUnitLiver.sampleHd5Filename );
 		{
-			km::ProfileClassifier adaboostClassifierLiver( profileUnitLiver.category );
-			adaboostClassifierLiver.train( knnClassifierLiver, outputdir );
+			km::ProfileClassifier adaboostClassifierLiver;
+			adaboostClassifierLiver.train( profilesLiver, profileUnitLiver.category, outputdir );
 			adaboostClassifierLiver.save( profileUnitLiver.classifierHd5FileName );
-
-			km::ProfileClassifier::IntFloatMapType errorMap;
-			adaboostClassifierLiver.test(knnClassifierLiver, errorMap);
-			km::assigneMesh<SimplexMeshType>( reflivermesh, 0.0 );
-			for (int pid=0;pid<reflivermesh->GetNumberOfPoints();pid++)
-			{
-				reflivermesh->SetPointData( pid, errorMap[knnClassifierLiver.cluster_labels[pid][0]] );
-			}
-
-			std::stringstream ss;
-			ss << outputdir << "\\ErrorMap_Liver.vtk";
-			km::writeMesh<SimplexMeshType>( ss.str().c_str(), reflivermesh );
-		}
-
-		//Output coordinate sample.
-		//Write profiles.
-		km::KNNProfileClassifier knnClassifierCoordinate;
-		knnClassifierCoordinate.setShapeNumber(numberOfData);
-		knnClassifierCoordinate.setShapePointsNumber(numberOfPoints);
-		knnClassifierCoordinate.loadSamples( profileUnitCoordinate.sampleTxtFilename );
-		knnClassifierCoordinate.cluster(9);
-		knnClassifierCoordinate.save( profileUnitCoordinate.sampleHd5Filename );
-		{
-			km::assigneMesh<SimplexMeshType>( reflivermesh, 0.0 );
-			for (int pid=0;pid<reflivermesh->GetNumberOfPoints();pid++)
-			{
-				reflivermesh->SetPointData( pid, knnClassifierCoordinate.cluster_labels[pid][0] );
-			}
-
-			std::stringstream ss;
-			ss << outputdir << "\\ClusteredMeshCoordinate.vtk";
-			km::writeMesh<SimplexMeshType>( ss.str().c_str(), reflivermesh );
+			adaboostClassifierLiver.test(profilesLiver);
 		}
 
 		//Output Boundary sample & classifier.
-		km::KNNProfileClassifier knnClassifierBoundary;
-		knnClassifierBoundary.setShapeNumber(numberOfData);
-		knnClassifierBoundary.setShapePointsNumber(numberOfPoints);
-		knnClassifierBoundary.loadSamples( profileUnitBoundary.sampleTxtFilename );
-		knnClassifierBoundary.copyCluster(knnClassifierPlain);
-		knnClassifierBoundary.save( profileUnitBoundary.sampleHd5Filename );
+		km::ProfileContainer profilesBoundary;
+		profilesBoundary.setShapeNumber(numberOfData);
+		profilesBoundary.setShapePointsNumber(numberOfPoints);
+		profilesBoundary.loadSamples( profileUnitBoundary.sampleTxtFilename );
+		profilesBoundary.copyCluster(profilesPlain);
+		profilesBoundary.save( profileUnitBoundary.sampleHd5Filename );
 		{
-			km::ProfileClassifier adaboostClassifierBoundary( profileUnitBoundary.category );
-			adaboostClassifierBoundary.train( knnClassifierBoundary, outputdir );
+			km::ProfileClassifier adaboostClassifierBoundary;
+			adaboostClassifierBoundary.train( profilesBoundary, profileUnitBoundary.category, outputdir );
 			adaboostClassifierBoundary.save( profileUnitBoundary.classifierHd5FileName );
-
-			km::ProfileClassifier::IntFloatMapType errorMap;
-			adaboostClassifierBoundary.test(knnClassifierBoundary, errorMap);
-			km::assigneMesh<SimplexMeshType>( reflivermesh, 0.0 );
-			for (int pid=0;pid<reflivermesh->GetNumberOfPoints();pid++)
-			{
-				reflivermesh->SetPointData( pid, errorMap[knnClassifierBoundary.cluster_labels[pid][0]] );
-			}
-
-			std::stringstream ss;
-			ss << outputdir << "\\ErrorMap_Boundary.vtk";
-			km::writeMesh<SimplexMeshType>( ss.str().c_str(), reflivermesh );
+			adaboostClassifierBoundary.test(profilesBoundary);
 		}
 
 		return EXIT_SUCCESS;

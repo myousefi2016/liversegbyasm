@@ -1,7 +1,8 @@
 #include "LiverSegmentationAPI.h"
 
 #include "kmProfileClassifier.h"
-#include "kmClassifiedPointsKdTree.h"
+#include "kmClassifierUtils.h"
+#include "kmSSMUtils.h"
 #include "kmModelFitting.h"
 #include "kmProfileExtractor.h"
 #include "kmGlobal.h"
@@ -27,53 +28,43 @@ namespace km
 		const char* atlasImageFile,
 		const char* configFile)
 	{
-		if ( notifier == NULL )
-		{
+		if ( notifier == NULL ){
 			std::cout<<"Notifier is NULL!"<<std::endl;
 			return;
 		}
-		if ( outputdir == NULL )
-		{
+		if ( outputdir == NULL ){
 			std::cout<<"outputdir is NULL!"<<std::endl;
 			return;
 		}
-		if ( inputImageFile == NULL )
-		{
+		if ( inputImageFile == NULL ){
 			std::cout<<"inputImageFile is NULL!"<<std::endl;
 			return;
 		}
-		if ( SSMFile == NULL )
-		{
+		if ( SSMFile == NULL ){
 			std::cout<<"SSMFile is NULL!"<<std::endl;
 			return;
 		}
-		if ( boundaryClassifierFile == NULL )
-		{
+		if ( boundaryClassifierFile == NULL ){
 			std::cout<<"boundaryClassifierFile is NULL!"<<std::endl;
 			return;
 		}
-		if ( liverClassifierFile == NULL )
-		{
+		if ( liverClassifierFile == NULL ){
 			std::cout<<"liverClassifierFile is NULL!"<<std::endl;
 			return;
 		}
-		if ( adaboostSegmentFile == NULL )
-		{
+		if ( adaboostSegmentFile == NULL ){
 			std::cout<<"adaboostSegmentFile is NULL!"<<std::endl;
 			return;
 		}
-		if ( geoFile == NULL )
-		{
+		if ( geoFile == NULL ){
 			std::cout<<"geoFile is NULL!"<<std::endl;
 			return;
 		}
-		if ( atlasImageFile == NULL )
-		{
+		if ( atlasImageFile == NULL ){
 			std::cout<<"atlasImageFile is NULL!"<<std::endl;
 			return;
 		}
-		if ( configFile == NULL )
-		{
+		if ( configFile == NULL ){
 			std::cout<<"configFile is NULL!"<<std::endl;
 			return;
 		}
@@ -94,10 +85,10 @@ namespace km
 		//读入分类器
 
 		typedef km::ProfileClassifier ProfileClassifierType;
-		ProfileClassifierType ProfileClassifier_Boundary(BOUNDARY);
+		ProfileClassifierType ProfileClassifier_Boundary;
 		ProfileClassifier_Boundary.load(boundaryClassifierFile);
 
-		ProfileClassifierType ProfileClassifier_Liver(LIVER);
+		ProfileClassifierType ProfileClassifier_Liver;
 		ProfileClassifier_Liver.load(liverClassifierFile);
 
 		//读入待分割图像
@@ -120,21 +111,18 @@ namespace km
 		SpacingType downspac;
 		downspac.Fill( RESAMPLE_SPACING );
 		inputImage = km::resampleImage<ShortImageType>( inputImage, downspac, minval );
-		if(WRITE_MIDDLE_RESULT)
-		{
+
+		if(WRITE_MIDDLE_RESULT){
 			km::writeImage<ShortImageType>( outputdir, "inputImage-downsampled.nii.gz", inputImage );
 		}
 
 		double zdist = RESAMPLE_SPACING * inputImage->GetLargestPossibleRegion().GetSize()[2];
-
-		if ( zdist > 400 )
-		{
+		if ( zdist > 400 ){
 			KM_DEBUG_INFO("ROI locating by template matching..");
 			inputImage = km::extractRoiByTemplateMatching<ShortImageType, ShortImageType>( inputImage, atlasImage );
 		}
 
-		if(WRITE_MIDDLE_RESULT)
-		{
+		if(WRITE_MIDDLE_RESULT){
 			km::writeImage<ShortImageType>( outputdir, "inputImage.nii.gz", inputImage );
 		}
 
@@ -144,8 +132,7 @@ namespace km
 		KM_DEBUG_INFO("Smooth input image..");
 		inputImage = km::minMaxSmooth<ShortImageType>( inputImage, 3, 1.0, 1 );
 
-		if(WRITE_MIDDLE_RESULT)
-		{
+		if(WRITE_MIDDLE_RESULT){
 			km::writeImage<ShortImageType>( outputdir, "inputImageSmoothed.nii.gz", inputImage );
 		}
 
@@ -169,17 +156,14 @@ namespace km
 		KM_DEBUG_INFO("Liver region initialization by region segmentation..");
 		{
 			g_phase = ADABOOST_REGION_SEGMENTATION;
-
 			memorymeter.Start( "adboost segmentation" );
 			chronometer.Start( "adboost segmentation" );
 
 			KM_DEBUG_INFO("Start to generate liver probabilistic map by Adboost...");
-
 			downspac.Fill( 4.0 );
 			ShortImageType::Pointer downsampleInput = km::resampleImage<ShortImageType>( inputImage,downspac, minval );
 
-			if(WRITE_MIDDLE_RESULT)
-			{
+			if(WRITE_MIDDLE_RESULT){
 				km::writeImage<ShortImageType>( outputdir, "downsampleInput.nii.gz", downsampleInput );
 			}
 
@@ -189,20 +173,14 @@ namespace km
 
 			KM_DEBUG_INFO("Generate body mask image...");
 			km::removeAir<ShortImageType, UCharImageType>( downsampleInput, bodyMask, minval, true );
-
-			if(WRITE_MIDDLE_RESULT)
-			{
+			if(WRITE_MIDDLE_RESULT){
 				km::writeImage<UCharImageType>( outputdir, "bodyMask.nii.gz", bodyMask );
 			}
 
 			//Locate liver
 			KM_DEBUG_INFO( "Generate liver probilistic map.." );
 			probablityMap = AdaSegment::adaSegment<FloatImageType, ShortImageType, UCharImageType>( downsampleInput, bodyMask, adaboostSegmentFile, 1, 300 );
-
-			//probablityMap = km::medianSmooth<FloatImageType>( probablityMap, 1 );
-
-			if(WRITE_MIDDLE_RESULT)
-			{
+			if(WRITE_MIDDLE_RESULT){
 				km::writeImage<FloatImageType>( outputdir, "probabilityMap.nii.gz", probablityMap );
 			}
 
@@ -213,23 +191,19 @@ namespace km
 			liverMask = km::binaryThresholdImage<FloatImageType, UCharImageType>(probablityMap, 0.3, 1.0, 1, 0);
 			liverMask = km::binaryOpen<UCharImageType>( liverMask, radius );
 			//liverMask = km::extractMaxConnectedComponent<UCharImageType>( liverMask );
-
 			//liverMask = km::fillSliceHole<UCharImageType>(liverMask, 0, 0);
 
 			FloatImageType::Pointer maskedProbablityMap = km::maskImage<FloatImageType, UCharImageType>(probablityMap, liverMask);
 			km::locateLiverFromProbablityMap<FloatImageType>( maskedProbablityMap, liverCentroid);
-
 			KM_DEBUG_PRINT( "Liver centroid ", liverCentroid );
 
 			UCharImageType::SizeType padding;
 			padding.Fill( 20 );
 			liverMask = km::padImage<UCharImageType>(liverMask,padding, padding, 0);
 
-			if(WRITE_MIDDLE_RESULT)
-			{
+			if(WRITE_MIDDLE_RESULT){
 				km::writeImage<UCharImageType>( outputdir, "liverMask.nii.gz", liverMask );
 			}
-
 			memorymeter.Stop( "adboost segmentation" );
 			chronometer.Stop( "adboost segmentation" );
 		}
@@ -242,15 +216,13 @@ namespace km
 		StatisticalModelType::VectorType paramweights = model->GetPCAVarianceVector();
 		StatisticalModelType::VectorType variances = model->GetPCAVarianceVector();
 		double totalVariances = 0.0;
-		for (int i=0;i<model->GetNumberOfPrincipalComponents();i++)
-		{
+		for (int i=0;i<model->GetNumberOfPrincipalComponents();i++){
 			totalVariances += std::abs(variances[i]);
 		}
 
 		//Since the first variance is alway the biggest one, so the weight will be based on this value.
 		//Some times we might get a crazy shape model which generate zero variance(should never happen), so for preventing from crashing, add a small value.
 		paramweights /= (variances[0]+0.000001);
-
 		unsigned int numberOfMainShapeComponents = 1;
 		unsigned int numberOfMainProfileComponents = 1;
 		double totalMainVariances = 0.0;
@@ -260,17 +232,12 @@ namespace km
 		{
 			totalMainVariances += std::abs(variances[i]);
 			double variancePercentage = totalMainVariances/totalVariances;
-			if ( variancePercentage < variancesThresholdLow )
-			{
+			if ( variancePercentage < variancesThresholdLow ){
 				numberOfMainShapeComponents ++;
 				numberOfMainProfileComponents ++;
-			}
-			else if( variancePercentage >= variancesThresholdLow && variancePercentage < variancesThresholdHigh )
-			{
+			}else if( variancePercentage >= variancesThresholdLow && variancePercentage < variancesThresholdHigh ){
 				numberOfMainProfileComponents ++;
-			}
-			else
-			{
+			}else{
 				break;
 			}
 		}
@@ -282,20 +249,18 @@ namespace km
 		GeometryImageType::Pointer geoImage = km::readImage<GeometryImageType>( geoFile );
 
 		MeshType::Pointer deformedMesh = model->DrawMean();
+		MeshType::Pointer meanShapeMesh = model->DrawMean();
 		MeshType::Pointer referenceShapeMesh = model->GetRepresenter()->GetReference();
 
 		loadSimplexMeshGeometryData<MeshType>(geoImage, deformedMesh);
 		loadSimplexMeshGeometryData<MeshType>(geoImage, referenceShapeMesh);
-
 		km::ComputeGeometry<MeshType>( deformedMesh );
 
 		km::initModelVariance<StatisticalModelType, MeshType>(model, deformedMesh, numberOfMainShapeComponents);
-		if (WRITE_MIDDLE_RESULT)
-		{
+		if (WRITE_MIDDLE_RESULT){
 			MeshType::Pointer varianceMesh = model->DrawMean();
 			varianceMesh->GetPointData()->Reserve( varianceMesh->GetNumberOfPoints() );
-			for (int i=0;i<varianceMesh->GetNumberOfPoints();i++)
-			{
+			for (int i=0;i<varianceMesh->GetNumberOfPoints();i++){
 				varianceMesh->SetPointData(i, g_varianceMap[i]);
 			}
 			km::writeMesh<MeshType>(outputdir,"varianceMesh.vtk", varianceMesh);
@@ -314,23 +279,22 @@ namespace km
 		MeshType::PointType meshCentroid = km::getMeshCentroid<MeshType>( deformedMesh );
 
 		typedef itk::AffineTransform<double, Dimension> RigidTransformType;
+		//typedef itk::Similarity3DTransform<double> RigidTransformType;
 		RigidTransformType::Pointer rigidTransform = RigidTransformType::New();
 		rigidTransform->SetIdentity();
 		rigidTransform->SetCenter( meshCentroid );
+		rigidTransform->Translate( liverCentroid - meshCentroid );
 
 		typedef itk::CompositeTransform<double, Dimension> CompositeTransformType;
 		CompositeTransformType::Pointer compositeTransform = CompositeTransformType::New();
 		compositeTransform->AddTransform( rigidTransform );
 		compositeTransform->AddTransform( shapeTransform );
 
-		rigidTransform->Translate( liverCentroid - meshCentroid );
-
 		km::transformMesh<MeshType, RigidTransformType>( deformedMesh, deformedMesh, rigidTransform );
 
 		//Nofify locate result
 		notifier->notify( deformedMesh );
-		if (WRITE_MIDDLE_RESULT)
-		{
+		if (WRITE_MIDDLE_RESULT){
 			writeMesh<MeshType>(outputdir, "locatedMesh.vtk", deformedMesh);
 		}
 
@@ -341,23 +305,6 @@ namespace km
 		bool flag_fittingByLiverProfile = false;
 		bool flag_deformingByLiverProfile = true;
 		bool flag_deformingBoundaryProfile = true;
-
-		std::vector<double> opt_scales;
-		opt_scales.resize( compositeTransform->GetNumberOfParameters() );
-
-		int p=0;
-		for (int t=0;t<shapeTransform->GetNumberOfParameters();t++)
-		{
-			opt_scales[p++] = 1.0;
-		}
-		for (int t=0;t<9;t++)
-		{
-			opt_scales[p++] = 1.0;
-		}
-		for (int t=0;t<3;t++)
-		{
-			opt_scales[p++] = 1e-3;
-		}
 
 		if(flag_fittingByDistMap)
 		{
@@ -376,18 +323,41 @@ namespace km
 			liverDistMap = km::absImage<FloatImageType>(liverDistMap);
 			liverDistMap = km::shiftScale<FloatImageType>(liverDistMap, 0, 100);
 
-			if(WRITE_MIDDLE_RESULT)
-			{
+			if(WRITE_MIDDLE_RESULT){
 				km::writeImage<FloatImageType>( outputdir, "liverDistMap.nii.gz", liverDistMap );
+			}
+
+			std::vector<double> opt_scales;
+			opt_scales.resize( compositeTransform->GetNumberOfParameters() );
+
+			int p=0;
+			for (int t=0;t<shapeTransform->GetNumberOfParameters();t++){
+				opt_scales[p++] = 1.0;
+			}
+			for (int t=0;t<9;t++){
+				opt_scales[p++] = 1.0;
+			}
+			for (int t=0;t<3;t++){
+				opt_scales[p++] = 1e-3;
 			}
 
 			int tmp_numberOfMainShapeComponents = numberOfMainShapeComponents;
 			shapeTransform->SetUsedNumberOfCoefficients( tmp_numberOfMainShapeComponents );
 
+			typedef itk::Similarity3DTransform<double> Similarity3DTransformType;
+			Similarity3DTransformType::Pointer similarityTransform = Similarity3DTransformType::New();
+			similarityTransform->SetIdentity();
+			similarityTransform->SetCenter( meshCentroid );
+			similarityTransform->Translate( liverCentroid - meshCentroid );
+
+			CompositeTransformType::Pointer compositeTransformTmp = CompositeTransformType::New();
+			compositeTransformTmp->AddTransform( similarityTransform );
+			compositeTransformTmp->AddTransform( shapeTransform );
+
 			double ssmParamDiff = km::transformFittingToDistanceMap<FloatImageType, MeshType, CompositeTransformType>(
 				liverDistMap,
 				referenceShapeMesh,
-				compositeTransform,
+				compositeTransformTmp,
 				tmp_numberOfMainShapeComponents,
 				opt_scales,
 				300);
@@ -403,6 +373,8 @@ namespace km
 			}
 			shapeTransform->SetParameters( shapeParamPost );
 
+			rigidTransform->SetMatrix(similarityTransform->GetMatrix());
+			rigidTransform->SetOffset(similarityTransform->GetOffset());
 			std::cout<<compositeTransform->GetParameters()<<std::endl;
 
 			km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, deformedMesh, compositeTransform );
@@ -439,14 +411,6 @@ namespace km
 			std::cout<<std::endl;
 		}
 
-		//TEST
-		//typedef itk::LinearInterpolateImageFunction<ShortImageType> IntensityInterpolatorType;
-		//typedef itk::LinearInterpolateImageFunction<GradientImageType> GradientInterpolatorType;
-		//IntensityInterpolatorType::Pointer intensityInterpolator = IntensityInterpolatorType::New();
-		//intensityInterpolator->SetInputImage( inputImage );
-		//GradientInterpolatorType::Pointer gradientInterpolator = GradientInterpolatorType::New();
-		//gradientInterpolator->SetInputImage( gradImage );
-
 		if (flag_deformingByLiverProfile)
 		{
 			std::cout<<"*******************************************************************************"<<std::endl;
@@ -468,9 +432,9 @@ namespace km
 
 			bool flagLooping = true;
 
-			MeshType::Pointer fittedMesh = km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, compositeTransform );
-			km::loadSimplexMeshGeometryData<MeshType>(geoImage, fittedMesh);
-			km::ComputeGeometry<MeshType>(fittedMesh, true);
+			MeshType::Pointer compositeFittedMesh = km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, compositeTransform );
+			km::loadSimplexMeshGeometryData<MeshType>(geoImage, compositeFittedMesh);
+			km::ComputeGeometry<MeshType>(compositeFittedMesh, true);
 
 			typedef itk::IdentityTransform<double, Dimension> IdentityTransformType;
 			IdentityTransformType::Pointer identityTransform = IdentityTransformType::New();
@@ -483,40 +447,43 @@ namespace km
 			profileExtractor.setImage(inputImage);
 			profileExtractor.enableCache(false);
 
-			typedef km::ClassifiedPointsKdTree<MeshType, ProfileExtractorType> ClassifiedPointsKdTreeType;
-			ClassifiedPointsKdTreeType classifiedPointsTree;
-			classifiedPointsTree.SetBoundaryClassifier(&ProfileClassifier_Boundary);
-			classifiedPointsTree.SetRegionClassifier(&ProfileClassifier_Liver);
-			classifiedPointsTree.SetProfileExtractor(&profileExtractor);
+			typedef km::ClassifierUtils<MeshType, ProfileExtractorType> ClassifierUtilsType;
+			ClassifierUtilsType classifierUtils;
+			classifierUtils.SetBoundaryClassifier(&ProfileClassifier_Boundary);
+			classifierUtils.SetRegionClassifier(&ProfileClassifier_Liver);
+			classifierUtils.SetProfileExtractor(&profileExtractor);
+
+			typedef km::SSMUtils<MeshType, StatisticalModelType, RigidTransformType, ShapeTransformType> SSMUtilsType;
+			SSMUtilsType ssmUtils;
+			ssmUtils.SetSSM(model);
+			ssmUtils.SetRigidTransform(rigidTransform);
+			ssmUtils.SetShapeTransform(shapeTransform);
+
+			MeshType::Pointer tmpMesh = MeshType::New();
 
 			while ( flagLooping )
 			{
 				std::cout<<"********************************iteration: "<<iter_ellapsed<<"************************************"<<std::endl;
 
-				g_liverCentroid.CastFrom(km::getMeshCentroid<MeshType>(fittedMesh));
+				g_liverCentroid.CastFrom(km::getMeshCentroid<MeshType>(compositeFittedMesh));
+				rigidTransform->SetCenter( g_liverCentroid );
 
-				//if (iter_ellapsed%2 == 0)
-				//{
-				//	KM_DEBUG_INFO("Update region tree...");
-				//	classifiedPointsTree.UpdateRegionTree(fittedMesh);
-				//}
-
-				//if (iter_ellapsed%2 == 1)
-				//{
-				//	KM_DEBUG_INFO("Update boundary tree...");
-				//	classifiedPointsTree.UpdateBoundaryTree(fittedMesh);
-				//}
-
-				deformByLiverClassification<ClassifiedPointsKdTreeType, ProfileExtractorType, FloatImageType, MeshType>
-					( &ProfileClassifier_Liver, &classifiedPointsTree, &profileExtractor, bestMesh, fittedMesh, 1.5, 20);
+				classifierUtils.deformByLiverClassification(bestMesh, compositeFittedMesh, 1.5, 20);
 
 				//Store rigid parameters before fitting.
 				RigidTransformType::ParametersType rigidParamPre = rigidTransform->GetParameters();
 				//Store shape parameters before fitting.
 				ShapeTransformType::ParametersType shapeParamPre = shapeTransform->GetParameters();
 
+				km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, tmpMesh, compositeTransform );
+
 				KM_DEBUG_PRINT("Composite transform fitting...", iter_ellapsed);
-				km::compositeTransformFitting<MeshType, StatisticalModelType, RigidTransformType, ShapeTransformType>( bestMesh, model, rigidTransform, shapeTransform );
+				ssmUtils.compositeTransformFitting(bestMesh);
+
+				km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, compositeFittedMesh, compositeTransform );
+				km::ComputeGeometry<MeshType>( compositeFittedMesh, true );
+
+				classifierUtils.updateShapeNormals(tmpMesh, compositeFittedMesh);
 
 				//Store rigid parameters before fitting.
 				RigidTransformType::ParametersType rigidParamPost = rigidTransform->GetParameters();
@@ -545,27 +512,13 @@ namespace km
 				std::cout<<"Rigid transform parameters: "<<rigidTransform->GetParameters()<<std::endl;
 				std::cout<<"Shape transform parameters: "<<shapeTransform->GetParameters()<<std::endl;
 
-				km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, fittedMesh, compositeTransform );
-				km::ComputeGeometry<MeshType>( fittedMesh, true );
-
-				if (WRITE_MIDDLE_RESULT)
-				{
-					MeshType::Pointer fittingErrorMesh = bestMesh;
-					fittingErrorMesh->GetPointData()->Reserve( fittingErrorMesh->GetNumberOfPoints() );
-					for (int i=0;i<fittingErrorMesh->GetNumberOfPoints();i++)
-					{
-						fittingErrorMesh->SetPointData(i, static_cast<double>(isAbnormal(i)));
-					}
-					km::writeMesh<MeshType>(outputdir,"fittingErrorMesh", iter_ellapsed, ".vtk", fittingErrorMesh);
-				}
-
-				notifier->notify( fittedMesh );
+				notifier->notify( compositeFittedMesh );
 				notifier->notify( bestMesh );
 
 				if (WRITE_MIDDLE_RESULT)
 				{
 					km::writeMesh<MeshType>(outputdir, "bestMesh", iter_ellapsed, ".vtk", bestMesh);
-					km::writeMesh<MeshType>(outputdir, "fittedMesh", iter_ellapsed, ".vtk", fittedMesh);
+					km::writeMesh<MeshType>(outputdir, "compositeFittedMesh", iter_ellapsed, ".vtk", compositeFittedMesh);
 				}
 
 				iter_ellapsed++;

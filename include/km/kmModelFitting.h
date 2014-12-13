@@ -30,7 +30,6 @@
 #include "itkCompositeTransform.h"
 #include "itkCovariantVector.h"
 
-#include "kmProfileClassifier.h"
 #include "kmVtkItkUtility.h"
 #include "kmGlobal.h"
 #include "kmUtility.h"
@@ -232,452 +231,143 @@ namespace km
 		return paradiff;
 	}
 
-	template<class ClassifiedPointsKdTreeType, class ProfileExtractorType, class FloatImageType, class MeshType>
-	void
-		deformByLiverClassification(
-		km::ProfileClassifier * classifier,
-		ClassifiedPointsKdTreeType * classifiedKdTree,
-		ProfileExtractorType * profileExtractor,
-		typename MeshType* outputMesh,
-		const typename MeshType* liverMesh,
-		double searchStep = 1.5,
-		unsigned int maxSearchPoints = 20)
-	{
-		typedef MeshType::PointsContainer PointsContainer;
-		typedef MeshType::PointsContainerConstPointer PointsContainerConstPointer;
-		typedef MeshType::PointsContainerPointer PointsContainerPointer;
-		typedef MeshType::PointsContainerIterator PointsContainerIterator;
-		typedef MeshType::PointDataContainer PointDataContainer;
-		typedef MeshType::GeometryMapType GeometryMapType;
-		typedef GeometryMapType::Pointer GeometryMapPointer;
-		typedef GeometryMapType::Iterator GeometryMapIterator;
-		typedef itk::SimplexMeshGeometry::VectorType VectorType;
-		typedef itk::SimplexMeshGeometry::PointType PointType;
+	//enum FittingType
+	//{
+	//	Rigid = 0,
+	//	Shape
+	//};
 
-		km::assigneMesh<MeshType>(outputMesh, 0.0);
+	//void initAbnormalMap(unsigned int N, bool reset = false)
+	//{
+	//	if (g_fittingErrorMap.size()==N && !reset)
+	//	{
+	//		return;
+	//	}
+	//	else
+	//	{
+	//		for (int idx=0;idx<N;idx++)
+	//		{
+	//			g_fittingErrorMap[idx] = 0.0;
+	//		}
+	//	}
+	//}
 
-		GeometryMapIterator geoIt = liverMesh->GetGeometryData()->Begin();
-		GeometryMapIterator geoItEnd = liverMesh->GetGeometryData()->End();
+	//bool isAbnormal(int idx)
+	//{
+	//	return g_fittingErrorMap[idx]>=g_fitting_error_threshold?true:false;
+	//}
 
-		itk::SimplexMeshGeometry *geodata;
-		while (geoIt!=geoItEnd)
-		{
-			MeshType::PointIdentifier idx = geoIt.Index();
-			geodata = geoIt.Value();
+	//unsigned int countAbnormal()
+	//{
+	//	unsigned int count = 0;
+	//	for (int idx=0;idx<g_fittingErrorMap.size();idx++)
+	//	{
+	//		if(isAbnormal(idx)) count++;
+	//	}
+	//	return count;
+	//}
 
-			PointType mpoint = liverMesh->GetPoint(idx);
-			VectorType normal;
-			normal.Set_vnl_vector(geodata->normal.Get_vnl_vector());
+	//template<class MatrixType>
+	//void
+	//	removeAbnormal(const typename MatrixType & matrix, typename MatrixType& matrixUpdated, FittingType rigidOrShape)
+	//{
+	//	if (countAbnormal() == 0)
+	//	{
+	//		matrixUpdated = matrix;
+	//		return;
+	//	}
 
-			double best_offset = 0.0;
+	//	unsigned int Dimension = 3;
+	//	if (rigidOrShape == Rigid)
+	//	{
+	//		unsigned int numberOfLandmarks = matrix.rows();
+	//		unsigned int numberOfAbnormal = countAbnormal();
+	//		matrixUpdated.setZero(numberOfLandmarks-numberOfAbnormal, matrix.cols());
+	//		unsigned long ptcount = 0;
+	//		for (int idx=0;idx<numberOfLandmarks;idx++)
+	//		{
+	//			if (!isAbnormal(idx))
+	//			{
+	//				for (int c=0;c<matrix.cols();c++)
+	//				{
+	//					matrixUpdated(ptcount, c) = matrix(idx, c);
+	//				}
+	//				ptcount++;
+	//			}
+	//		}
+	//		KM_ASSERT(ptcount == matrixUpdated.rows());
+	//	}
+	//	else
+	//	{
+	//		unsigned int numberOfLandmarks = matrix.rows()/Dimension;
+	//		unsigned int numberOfAbnormal = countAbnormal();
+	//		matrixUpdated.setZero((numberOfLandmarks-numberOfAbnormal)*Dimension, matrix.cols());
+	//		unsigned long ptcount = 0;
+	//		for (int idx=0;idx<numberOfLandmarks;idx++)
+	//		{
+	//			if (!isAbnormal(idx))
+	//			{
+	//				for (int d=0;d<Dimension;d++)
+	//				{
+	//					for (int c=0;c<matrix.cols();c++)
+	//					{
+	//						matrixUpdated(ptcount*Dimension+d, c) = matrix(idx*Dimension+d, c);
+	//					}
+	//				}
+	//				ptcount++;
+	//			}
+	//		}
+	//		KM_ASSERT(ptcount*Dimension == matrixUpdated.rows());
+	//	}
 
-			PointType closestBoundaryPoint;
-			//bool foundBoundary = classifiedKdTree->FindClosestBoundaryPoint(closestBoundaryPoint, mpoint, idx);
-			bool foundBoundary = classifiedKdTree->FindFirstBoundaryPoint(closestBoundaryPoint, mpoint, geodata, idx, 1.0);
-			foundBoundary = false;
+	//	//KM_DEBUG_PRINT("Matrix rows before removing ", matrix.rows());
+	//	//KM_DEBUG_PRINT("Matrix rows after removing ", matrixUpdated.rows());
+	//}
 
-			PointType closestNextRegionPoint;
-			//bool foundNextRegion = classifiedKdTree->FindClosestNextRegionPoint(closestNextRegionPoint, mpoint, idx);
-			bool foundNextRegion = true;
-			classifiedKdTree->FindNextRegionPoint(closestNextRegionPoint, mpoint, geodata, idx, 1.0);
+	//template<class MeshType>
+	//void
+	//	updateFittingErrorMap(
+	//	const typename MeshType * tagetMesh,
+	//	const typename MeshType * unfittedMesh,
+	//	const typename MeshType * fittedMesh)
+	//{
+	//	KM_ASSERT(tagetMesh->GetNumberOfPoints() == unfittedMesh->GetNumberOfPoints());
 
-			double distToBoundary = itk::NumericTraits<double>::max();
-			if (foundBoundary)
-			{
-				distToBoundary = closestBoundaryPoint.EuclideanDistanceTo(mpoint);
-			}
+	//	typedef MeshType::PointType PointType;
+	//	typedef PointType::VectorType VectorType;
+	//	for (int idx=0;idx<tagetMesh->GetNumberOfPoints();idx++)
+	//	{			
+	//		PointType targetPoint = tagetMesh->GetPoint(idx);
+	//		PointType unfittedPoint = unfittedMesh->GetPoint(idx);
+	//		PointType fittedPoint = fittedMesh->GetPoint(idx);
 
-			double distToNextRegion = itk::NumericTraits<double>::max();
-			if (foundNextRegion)
-			{
-				distToNextRegion = closestNextRegionPoint.EuclideanDistanceTo(mpoint);
-			}
+	//		double errorUpdated = 0.0;
+	//		double unfittedDist = unfittedPoint.EuclideanDistanceTo(targetPoint);
 
-			if (distToBoundary <= foundNextRegion)
-			{
-				VectorType vec = closestBoundaryPoint - mpoint;
-				best_offset = dot_product(vec.GetVnlVector(), normal.GetVnlVector());
-			}
-			else
-			{
-				VectorType vec = closestNextRegionPoint - mpoint;
-				best_offset = dot_product(vec.GetVnlVector(), normal.GetVnlVector());
-			}
+	//		if (isAbnormal(idx))
+	//		{
+	//			errorUpdated = 0.0;
+	//		}
+	//		else if (unfittedDist < 5.0)
+	//		{
+	//			errorUpdated = 0.0;
+	//		}
+	//		else
+	//		{
+	//			double fittedDist = fittedPoint.EuclideanDistanceTo(targetPoint);
+	//			errorUpdated = fittedDist / unfittedDist;
+	//		}
 
-			//if ( false )
-			//{
-			//	//std::cout<<"Find closest bounday point for: "<<idx<<std::endl;
-			//	PointType closedBoundaryPoint;
-			//	bool found = classifiedKdTree->FindClosestBoundaryPoint(closedBoundaryPoint, mpoint, idx);
-			//	if (found)
-			//	{
-			//		VectorType shiftVec = closedBoundaryPoint - mpoint;
-			//		best_offset = shiftVec*normal;
-			//	}
-			//}
-			//else
-			//{
-			//	double maxDist = g_varianceMap[idx];
-			//	double direction = 1.0;
-			//	unsigned int searchedPoints = 1;
-			//	while(searchedPoints<=maxSearchPoints && std::abs(best_offset)<=maxDist)
-			//	{
-			//		PointType pttest = mpoint + normal*best_offset;
-			//		double tmpDirection = -1.0;
-			//		if (profileExtractor->isInsideBuffer(pttest))
-			//		{
-			//			std::vector<FLOATTYPE> feature;
-			//			profileExtractor->extractFeatureSet(feature, classifier->profile_category, geodata, pttest);
+	//		g_fittingErrorMap[idx] = g_fittingErrorMap[idx]*0.8 + errorUpdated*0.2;
+	//	}
 
-			//			tmpDirection = 2.0*classifier->classify(feature,idx) - 1.0;
-			//		}
-			//		best_offset += tmpDirection * searchStep;
-			//		if (searchedPoints == 1)
-			//		{
-			//			direction = tmpDirection>0?1.0:-1.0;
-			//		}
-			//		else if (tmpDirection*direction<0) //Change direction. Break from here.
-			//		{
-			//			break;
-			//		}
-			//		searchedPoints++;
-			//	}
-			//}
-
-			//if (isAbnormal(idx))
-			//{
-			//	best_offset = best_offset>0?-1.0*searchStep:searchStep;
-			//}
-
-			outputMesh->SetPointData(idx, best_offset);
-
-			geoIt++;
-		}
-
-		//Remove noise point.
-		km::smoothMeshData<MeshType>(outputMesh, 0);
-
-		geoIt = liverMesh->GetGeometryData()->Begin();
-		geoItEnd = liverMesh->GetGeometryData()->End();
-
-		while (geoIt!=geoItEnd)
-		{
-			unsigned int idx = geoIt.Index();
-			geodata = geoIt.Value();
-
-			VectorType normal;
-			normal.Set_vnl_vector(geodata->normal.Get_vnl_vector());
-
-			double offsetVal = 0.0;
-			outputMesh->GetPointData(idx, &offsetVal);
-
-			PointType oldPos = liverMesh->GetPoint(idx);
-			outputMesh->SetPoint(idx, oldPos + normal*offsetVal);
-
-			geoIt++;
-		}
-	}
-
-	enum FittingType
-	{
-		Rigid = 0,
-		Shape
-	};
-
-	template<class MatrixType, class TransformType>
-	void FillRigidTransform(const MatrixType & mat, TransformType * transform)
-	{
-		TransformType::MatrixType rigidMatrix = transform->GetMatrix();
-		TransformType::OffsetType rigidOffset = transform->GetOffset();
-		for (int i=0;i<3;i++)
-		{
-			for (int j=0;j<3;j++)
-			{
-				rigidMatrix[i][j] = mat(i, j);
-			}
-		}
-		//std::cout<<rigidMatrix<<std::endl;
-		for (int i=0;i<Dimension;i++)
-		{
-			rigidOffset[i] = mat(i, Dimension);
-		}
-		//std::cout<<rigidOffset<<std::endl;
-		transform->SetMatrix( rigidMatrix );
-		transform->SetOffset( rigidOffset );
-	}
-
-	template<class MatrixType, class TransformType>
-	void FillShapeTransform(const MatrixType & mat, TransformType * transform)
-	{
-		TransformType::ParametersType shapeParams = transform->GetParameters();
-		for (int i=0;i<transform->GetUsedNumberOfCoefficients();i++)
-		{
-			if (mat[i]<-3.0){
-				shapeParams[i] = -3;
-			}else if (mat[i]>3.0){
-				shapeParams[i] = 3;
-			}else{
-				shapeParams[i] = mat[i];	
-			}
-		}
-		transform->SetParameters(shapeParams);
-		KM_DEBUG_PRINT("Shape paramters after fitting", shapeParams);
-	}
-
-	void initAbnormalMap(unsigned int N, bool reset = false)
-	{
-		if (g_fittingErrorMap.size()==N && !reset)
-		{
-			return;
-		}
-		else
-		{
-			for (int idx=0;idx<N;idx++)
-			{
-				g_fittingErrorMap[idx] = 0.0;
-			}
-		}
-	}
-
-	bool isAbnormal(int idx)
-	{
-		return g_fittingErrorMap[idx]>=g_fitting_error_threshold?true:false;
-	}
-
-	unsigned int countAbnormal()
-	{
-		unsigned int count = 0;
-		for (int idx=0;idx<g_fittingErrorMap.size();idx++)
-		{
-			if(isAbnormal(idx)) count++;
-		}
-		return count;
-	}
-
-	template<class MeshType, class MatrixType>
-	void fillPointSetIntoMatrix(const MeshType* mesh, MatrixType& matrix, FittingType rigidOrShape)
-	{
-		//KM_DEBUG_INFO("fillPointSetIntoMatrix");
-		unsigned int Dimension = MeshType::PointDimension;
-		unsigned int numberOfLandmarks = mesh->GetNumberOfPoints();
-
-		if (rigidOrShape == Rigid)
-		{
-			matrix.setConstant(numberOfLandmarks, Dimension+1, 1.0);
-			unsigned long rowcnt = 0;
-			for (int idx=0;idx<numberOfLandmarks;idx++)
-			{
-				MeshType::PointType pt = mesh->GetPoint(idx);
-				for (int d=0;d<Dimension;d++)
-				{
-					matrix(rowcnt, d) = pt[d];
-				}
-				rowcnt++;
-			}
-		}
-		else
-		{
-			matrix.setZero( numberOfLandmarks*Dimension, 1);
-			unsigned long rowcnt = 0;
-			for (int idx=0;idx<numberOfLandmarks;idx++)
-			{
-				MeshType::PointType pt = mesh->GetPoint(idx);
-				for (int d=0;d<Dimension;d++)
-				{
-					matrix(rowcnt, 0) = pt[d];
-					rowcnt++;
-				}
-			}
-		}
-	}
-
-	template<class MatrixType>
-	void
-		removeAbnormal(const typename MatrixType & matrix, typename MatrixType& matrixUpdated, FittingType rigidOrShape)
-	{
-		if (countAbnormal() == 0)
-		{
-			matrixUpdated = matrix;
-			return;
-		}
-
-		unsigned int Dimension = 3;
-		if (rigidOrShape == Rigid)
-		{
-			unsigned int numberOfLandmarks = matrix.rows();
-			unsigned int numberOfAbnormal = countAbnormal();
-			matrixUpdated.setZero(numberOfLandmarks-numberOfAbnormal, matrix.cols());
-			unsigned long ptcount = 0;
-			for (int idx=0;idx<numberOfLandmarks;idx++)
-			{
-				if (!isAbnormal(idx))
-				{
-					for (int c=0;c<matrix.cols();c++)
-					{
-						matrixUpdated(ptcount, c) = matrix(idx, c);
-					}
-					ptcount++;
-				}
-			}
-			KM_ASSERT(ptcount == matrixUpdated.rows());
-		}
-		else
-		{
-			unsigned int numberOfLandmarks = matrix.rows()/Dimension;
-			unsigned int numberOfAbnormal = countAbnormal();
-			matrixUpdated.setZero((numberOfLandmarks-numberOfAbnormal)*Dimension, matrix.cols());
-			unsigned long ptcount = 0;
-			for (int idx=0;idx<numberOfLandmarks;idx++)
-			{
-				if (!isAbnormal(idx))
-				{
-					for (int d=0;d<Dimension;d++)
-					{
-						for (int c=0;c<matrix.cols();c++)
-						{
-							matrixUpdated(ptcount*Dimension+d, c) = matrix(idx*Dimension+d, c);
-						}
-					}
-					ptcount++;
-				}
-			}
-			KM_ASSERT(ptcount*Dimension == matrixUpdated.rows());
-		}
-
-		//KM_DEBUG_PRINT("Matrix rows before removing ", matrix.rows());
-		//KM_DEBUG_PRINT("Matrix rows after removing ", matrixUpdated.rows());
-	}
-
-	template<class MeshType>
-	void
-		updateFittingErrorMap(
-		const typename MeshType * tagetMesh,
-		const typename MeshType * unfittedMesh,
-		const typename MeshType * fittedMesh)
-	{
-		KM_ASSERT(tagetMesh->GetNumberOfPoints() == unfittedMesh->GetNumberOfPoints());
-
-		typedef MeshType::PointType PointType;
-		typedef PointType::VectorType VectorType;
-		for (int idx=0;idx<tagetMesh->GetNumberOfPoints();idx++)
-		{			
-			PointType targetPoint = tagetMesh->GetPoint(idx);
-			PointType unfittedPoint = unfittedMesh->GetPoint(idx);
-			PointType fittedPoint = fittedMesh->GetPoint(idx);
-
-			double errorUpdated = 0.0;
-			double unfittedDist = unfittedPoint.EuclideanDistanceTo(targetPoint);
-
-			if (isAbnormal(idx))
-			{
-				errorUpdated = 0.0;
-			}
-			else if (unfittedDist < 5.0)
-			{
-				errorUpdated = 0.0;
-			}
-			else
-			{
-				double fittedDist = fittedPoint.EuclideanDistanceTo(targetPoint);
-				errorUpdated = fittedDist / unfittedDist;
-			}
-
-			g_fittingErrorMap[idx] = g_fittingErrorMap[idx]*0.8 + errorUpdated*0.2;
-		}
-
-		unsigned int abnormalCount = countAbnormal();
-		if (abnormalCount > g_fittingErrorMap.size() * 0.25)
-		{
-			KM_DEBUG_ERROR("Abnormal points has exceed 25%");
-			//initAbnormalMap(g_fittingErrorMap.size(), true);
-		}
-	}
-
-	template<class MeshType, class StatisticalModelType, class RigidTransformType, class ShapeTransformType>
-	void
-		compositeTransformFitting( 
-		const MeshType* targetMesh, 
-		const StatisticalModelType* model, 
-		RigidTransformType * rigidTransform,
-		ShapeTransformType * shapeTransform)
-	{
-		unsigned int Dimension = MeshType::PointType::PointDimension;
-
-		if (shapeTransform->GetUsedNumberOfCoefficients() > shapeTransform->GetNumberOfParameters())
-		{
-			shapeTransform->SetUsedNumberOfCoefficients(shapeTransform->GetNumberOfParameters());
-		}
-
-		MeshType::Pointer referenceShapeMesh = model->GetRepresenter()->GetReference();
-
-		unsigned int numberOfLandmarks = referenceShapeMesh->GetNumberOfPoints();
-		km::initAbnormalMap(numberOfLandmarks);
-
-		typedef StatisticalModelType::ImplType StatisticalModelImplType;
-		typedef statismo::MatrixType StatismoMatrixType;
-		typedef statismo::VectorType StatismoVectorType;
-
-		{
-			MeshType::ConstPointer sourceMeshForRigid = km::transformMesh<MeshType, ShapeTransformType>(referenceShapeMesh, shapeTransform);
-			MeshType::ConstPointer targetMeshForRigid = targetMesh;
-
-			//StatismoMatrixType sourceMatrixForRigidTmp, targetMatrixForRigidTmp;
-			StatismoMatrixType sourceMatrixForRigid, targetMatrixForRigid;
-			fillPointSetIntoMatrix<MeshType, StatismoMatrixType>(sourceMeshForRigid, sourceMatrixForRigid, Rigid);
-			fillPointSetIntoMatrix<MeshType, StatismoMatrixType>(targetMeshForRigid, targetMatrixForRigid, Rigid);
-
-			//removeAbnormal<StatismoMatrixType>(sourceMatrixForRigidTmp, sourceMatrixForRigid, Rigid);
-			//removeAbnormal<StatismoMatrixType>(targetMatrixForRigidTmp, targetMatrixForRigid, Rigid);
-
-			StatismoVectorType I = StatismoVectorType::Ones(sourceMatrixForRigid.cols());
-			StatismoMatrixType Mmatrix = sourceMatrixForRigid.transpose() * sourceMatrixForRigid;
-			Mmatrix.diagonal() += I;
-			StatismoMatrixType MInverseMatrix = Mmatrix.inverse();
-			const StatismoMatrixType& WT = sourceMatrixForRigid.transpose();
-			StatismoMatrixType coeffsRigid = MInverseMatrix * (WT * targetMatrixForRigid);
-
-			FillRigidTransform<StatismoMatrixType, RigidTransformType>(coeffsRigid.transpose(), rigidTransform);
-		}
-
-		{
-			/*****************Fit shape parameters****************/
-
-			RigidTransformType::Pointer inversedRigidTransform = RigidTransformType::New();
-			rigidTransform->GetInverse( inversedRigidTransform );
-			MeshType::Pointer targetMeshForShape = km::transformMesh<MeshType, RigidTransformType>(targetMesh, inversedRigidTransform);
-			MeshType::Pointer sourceMeshForShape = model->DrawMean();
-
-			//StatismoVectorType sourceMatrixForShapeTmp, targetMatrixForShapeTmp;
-			StatismoVectorType sourceMatrixForShape, targetMatrixForShape;
-			//const StatismoMatrixType & basisMatrixForShapeTmp = model->GetstatismoImplObj()->GetPCABasisMatrix();
-			//StatismoMatrixType basisMatrixForShape;
-			const StatismoMatrixType & basisMatrixForShape = model->GetstatismoImplObj()->GetPCABasisMatrix();
-			fillPointSetIntoMatrix<MeshType, StatismoVectorType>(sourceMeshForShape, sourceMatrixForShape, Shape);
-			fillPointSetIntoMatrix<MeshType, StatismoVectorType>(targetMeshForShape, targetMatrixForShape, Shape);
-
-			//removeAbnormal<StatismoVectorType>(sourceMatrixForShapeTmp, sourceMatrixForShape, Shape);
-			//removeAbnormal<StatismoVectorType>(targetMatrixForShapeTmp, targetMatrixForShape, Shape);
-			//removeAbnormal<StatismoMatrixType>(basisMatrixForShapeTmp, basisMatrixForShape, Shape);
-
-			StatismoVectorType I = StatismoVectorType::Ones(basisMatrixForShape.cols());
-			StatismoMatrixType Mmatrix = basisMatrixForShape.transpose() * basisMatrixForShape;
-			Mmatrix.diagonal() += I;
-			StatismoMatrixType MInverseMatrix = Mmatrix.inverse();
-			const StatismoMatrixType& WT = basisMatrixForShape.transpose();
-			StatismoVectorType coeffsShape = MInverseMatrix * (WT * (targetMatrixForShape-sourceMatrixForShape));
-
-			MeshType::Pointer shapeUnfittedMesh = km::transformMesh<MeshType, ShapeTransformType>(referenceShapeMesh, shapeTransform);
-
-			FillShapeTransform<StatismoVectorType, ShapeTransformType>(coeffsShape, shapeTransform);
-
-			MeshType::Pointer shapeFittedMesh = km::transformMesh<MeshType, ShapeTransformType>(referenceShapeMesh, shapeTransform);
-
-			if(g_disable_abnormal)
-			{
-				km::updateFittingErrorMap<MeshType>(targetMeshForShape, shapeUnfittedMesh, shapeFittedMesh);
-			}
-		}
-	}
+	//	unsigned int abnormalCount = countAbnormal();
+	//	if (abnormalCount > g_fittingErrorMap.size() * 0.25)
+	//	{
+	//		KM_DEBUG_ERROR("Abnormal points has exceed 25%");
+	//		//initAbnormalMap(g_fittingErrorMap.size(), true);
+	//	}
+	//}
 
 	template<class StatisticalModelType, class MeshType>
 	void

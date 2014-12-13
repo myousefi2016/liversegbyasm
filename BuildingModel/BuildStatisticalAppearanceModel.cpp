@@ -36,7 +36,7 @@
 */
 
 
-#include <itkCovariantVector.h>
+#include "itkCovariantVector.h"
 #include "Representers/ITK/itkVectorSimplexMeshRepresenter.h"
 #include "statismo_ITK/itkStatisticalModel.h"
 #include "statismo_ITK/itkPCAModelBuilder.h"

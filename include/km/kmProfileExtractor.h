@@ -15,6 +15,8 @@
 #include "itkVarianceImageFunction.h"
 #include "itkGaussianDerivativeImageFunction.h"
 #include "itkCentralDifferenceImageFunction.h"
+#include <itkGradientMagnitudeRecursiveGaussianImageFilter.h>
+#include <itkGradientRecursiveGaussianImageFilter.h>
 
 #include "vnl/vnl_matrix.h"
 #include "vnl/vnl_vector.h"
@@ -33,13 +35,12 @@ namespace km
 		typedef typename ImageType::IndexType                                               IndexType;
 		typedef typename ImageType::PointType                                               PointType;
 		typedef typename PointType::VectorType                                              VectorType;
+		typedef itk::Image<float, ImageDimension>                                           GradientImageType;
 		typedef typename itk::LinearInterpolateImageFunction<ImageType>                     LinearInterpolateImageFunctionType;
 		typedef typename itk::MedianImageFunction<ImageType>                                MedianImageFunctionType;
 		typedef typename itk::MeanImageFunction<ImageType>                                  MeanImageFunctionType;
-		//typedef typename itk::GaussianDerivativeImageFunction<ImageType, double>            GradientImageFunctionType;
-		typedef typename itk::CentralDifferenceImageFunction<ImageType, double>             GradientImageFunctionType;
+		typedef typename itk::LinearInterpolateImageFunction<GradientImageType>             GradientImageFunctionType;
 		typedef typename itk::VarianceImageFunction<ImageType, double>                      VarianceImageFunctionType;
-		typedef typename GradientImageFunctionType::OutputType                              GradientValueType;
 		typedef std::vector<double>                                                         FeatureSetType;
 
 		typedef typename ImageType::OffsetValueType                                         OffsetValueType;
@@ -91,11 +92,16 @@ namespace km
 			meanFunc->SetInputImage(inputImage);
 			meanFunc->SetNeighborhoodRadius(2);
 
-			gradientFunc->SetInputImage(inputImage);
-			//gradientFunc->SetSigma(SIGMA);
-
 			varianceFunc->SetInputImage(inputImage);
 			varianceFunc->SetNeighborhoodRadius(2);
+
+			typedef itk::GradientMagnitudeRecursiveGaussianImageFilter<ImageType, GradientImageType> GradientMagnitudeRecursiveGaussianImageFilterType;
+			GradientMagnitudeRecursiveGaussianImageFilterType::Pointer gradientMagFilter = GradientMagnitudeRecursiveGaussianImageFilterType::New();
+			gradientMagFilter->SetInput( inputImage );
+			gradientMagFilter->SetSigma( SIGMA );
+			gradientMagFilter->Update();
+
+			gradientFunc->SetInputImage(gradientMagFilter->GetOutput());
 
 			//std::cout<<g_liverThresholds[0].first<<", "<<g_liverThresholds[0].second<<std::endl;
 		}
@@ -106,6 +112,7 @@ namespace km
 			pointSet.clear();
 
 			this->currentPoint = cur_pos;
+			this->geoData = const_cast<itk::SimplexMeshGeometry*>(geoData);
 			this->normal.Set_vnl_vector(geoData->normal.Get_vnl_vector());
 
 			OffsetValueType offset = itk::NumericTraits<OffsetValueType>::max();
@@ -116,56 +123,43 @@ namespace km
 				offset = this->inputImage->ComputeOffset(cur_idx);
 			}
 
-			if (profileCategory==PLAIN)
-			{
+			if (profileCategory==PLAIN){
 				this->addPoints(profileCategory, PROFILE_DIM, PROFILE_SPACING);
 				this->extractIntensitySet(featureSet);
-			}
-			else if (profileCategory==LIVER)
+			}else if (profileCategory==LIVER)
 			{
-				if (enableCacheFlag)
-				{
+				if (enableCacheFlag){
 					getCachedFeatures(featureSet, profileCategory, offset);
 				}
 
-				if (featureSet.size() == 0)
-				{
+				if (featureSet.size() == 0){
 					this->addPoints(profileCategory, PROFILE_DIM, PROFILE_SPACING);
 					this->extractIntensityStatistics(featureSet);
-					this->extractGradientMoment(featureSet);
-					//this->extractGradientSet(featureSet);
-					if (enableCacheFlag)
-					{
+					this->extractVarianceSet(featureSet);
+					if (enableCacheFlag){
 						setCachedFeatures(featureSet, profileCategory, offset);
 					}
 				}
 			}
 			else if (profileCategory==BOUNDARY)
 			{
-				if (enableCacheFlag)
-				{
+				if (enableCacheFlag){
 					getCachedFeatures(featureSet, profileCategory, offset);
 				}
 
-				if (featureSet.size() == 0)
-				{
+				if (featureSet.size() == 0){
 					this->addPoints(profileCategory, PROFILE_DIM, PROFILE_SPACING);
 					this->extractIntensityStatistics(featureSet);
-					this->extractGradientMoment(featureSet);
-					//this->extractGradientSet(featureSet);
-					if (enableCacheFlag)
-					{
+					this->extractTangentFeatureSet(featureSet);
+					if (enableCacheFlag){
 						setCachedFeatures(featureSet, profileCategory, offset);
 					}
 				}
 			}
-			else if(profileCategory==COORDINATE)
-			{
+			else if(profileCategory==COORDINATE){
 				this->extractCoordinate(featureSet);
-			}
-			else
-			{
-				std::cout<<"Unknown profile category: "<<category2string(profileCategory)<<std::endl;
+			}else{
+				std::cout<<"Unknown profile category: "<<ProfileCategoryUtils::category2string(profileCategory)<<std::endl;
 			}
 		}
 	private:
@@ -183,52 +177,51 @@ namespace km
 		CategorizedFeatureSetMap cachedFeaturesSetMap;
 
 		PointType currentPoint;
+		itk::SimplexMeshGeometry * geoData;
 
 		void addPoints(PROFILE_CATEGORY profileCategory, int profile_dimension, double profile_spacing)
 		{
 			int shiftDim;
-			if (profileCategory == PLAIN)
-			{
+			if (profileCategory == PLAIN){
+				shiftDim = profile_dimension/2;
+			}else if (profileCategory == BOUNDARY){
 				shiftDim = profile_dimension-1;
-			}
-			else if (profileCategory == BOUNDARY)
-			{
+			}else if (profileCategory == LIVER){
 				shiftDim = profile_dimension-1;
-			}
-			else if (profileCategory == LIVER)
-			{
-				shiftDim = profile_dimension-1;
-			}
-			else
-			{
+			}else{
 				shiftDim = profile_dimension-1;
 			}
 
 			PointType startPt = this->currentPoint - normal*shiftDim*profile_spacing;
-			for ( int i=0;i<profile_dimension;i++ )
-			{
+			for ( int i=0;i<profile_dimension;i++ ){
 				pointSet.push_back(startPt + normal*profile_spacing*i);
 			}
 		}
 
 		double mappingItensity( double val )
 		{
-			int intensity = val;
+			double intensity = val;
 			intensity = intensity - 0.5*( g_liverThresholds[0].first + g_liverThresholds[0].second );
 
 			return intensity;
+		}
+
+		double extractIntensity( PointType & pt )
+		{
+			double grayValue = -1024;
+			if (this->linerInterpolatorFunc->IsInsideBuffer( pt ))
+			{
+				grayValue = this->linerInterpolatorFunc->Evaluate( pt );
+				grayValue = mappingItensity(grayValue);
+			}
+			return grayValue;
 		}
 
 		void extractIntensitySet( FeatureSetType & featureSet )
 		{
 			for (int i=0;i<pointSet.size();i++)
 			{
-				double greyValue = -1024;
-				if (this->linerInterpolatorFunc->IsInsideBuffer(pointSet[i]))
-				{
-					greyValue = this->linerInterpolatorFunc->Evaluate(pointSet[i]);
-					greyValue = mappingItensity(greyValue);
-				}
+				double greyValue = extractIntensity(pointSet[i]);
 				featureSet.push_back(greyValue);
 			}
 		}
@@ -241,23 +234,16 @@ namespace km
 			gray_mean = gray_sd = gray_contrast = norm = 0;
 			for (int i=0;i<pointSet.size();i++)
 			{
-				double grayValue = -1024;
-				if (this->linerInterpolatorFunc->IsInsideBuffer(pointSet[i]))
-				{
-					grayValue = this->linerInterpolatorFunc->Evaluate(pointSet[i]);
-					grayValue = mappingItensity(grayValue);
-				}
+				double grayValue = extractIntensity(pointSet[i]);
+
 				gray_list.push_back(grayValue);
 				featureSet.push_back(grayValue);
 
 				norm += grayValue*grayValue;
 				gray_mean += grayValue;
-				if (i<pointSet.size()/2)
-				{
+				if (i<pointSet.size()/2){
 					gray_contrast += grayValue;
-				}
-				else
-				{
+				}else{
 					gray_contrast -= grayValue;
 				}
 			}
@@ -266,7 +252,6 @@ namespace km
 
 			gray_mean /= gray_list.size();
 			featureSet.push_back(gray_mean);
-
 			featureSet.push_back(gray_contrast);
 
 			for (int i=0;i<gray_list.size();i++)
@@ -299,17 +284,22 @@ namespace km
 			featureSet.push_back(medianValue);
 		}
 
+		typename GradientImageType::PixelType extractGradient( PointType & pt )
+		{
+			GradientImageType::PixelType gradientValue = 0.0;
+			if (this->gradientFunc->IsInsideBuffer( pt ))
+			{
+				gradientValue = this->gradientFunc->Evaluate( pt );
+			}
+			return gradientValue;
+		}
+
 		void extractGradientSet( FeatureSetType & featureSet )
 		{
 			for (int i=0;i<pointSet.size();i++)
 			{
-				GradientValueType gradientValue;
-				gradientValue.Fill(0);
-				if (this->gradientFunc->IsInsideBuffer(pointSet[i]))
-				{
-					gradientValue = this->gradientFunc->Evaluate(pointSet[i]);
-				}
-				featureSet.push_back( dot_product( gradientValue.GetVnlVector(), normal.GetVnlVector()) );
+				GradientImageType::PixelType gradientValue = extractGradient(pointSet[i]);
+				featureSet.push_back(gradientValue);
 			}
 		}
 
@@ -317,26 +307,36 @@ namespace km
 		{
 			for (int i=0;i<pointSet.size();i++)
 			{
-				GradientValueType gvec;
-				gvec.Fill(0);
-				if (this->gradientFunc->IsInsideBuffer(pointSet[i]))
-				{
-					gvec = this->gradientFunc->Evaluate(pointSet[i]);
-				}
-				double gradient = dot_product( gvec.GetVnlVector(), normal.GetVnlVector());
-
-				featureSet.push_back(std::pow(2.0, i)*gradient);
+				GradientImageType::PixelType gradientValue = extractGradient(pointSet[i]);
+				featureSet.push_back(std::pow(2.0, i)*gradientValue);
 			}
 		}
 
-		void extractVariance( FeatureSetType & featureSet )
+		void extractTangentFeatureSet( FeatureSetType & featureSet )
+		{
+			featureSet.push_back(extractGradient(currentPoint));
+			for (int i=1;i<=PROFILE_DIM/3;i++)
+			{
+				double val0 = extractGradient(currentPoint + geoData->neighborDirections[0]*i*PROFILE_SPACING);
+				double val1 = extractGradient(currentPoint + geoData->neighborDirections[1]*i*PROFILE_SPACING);
+				double val2 = extractGradient(currentPoint + geoData->neighborDirections[2]*i*PROFILE_SPACING);
+				featureSet.push_back( (val0+val1+val2)/3 );
+			}
+		}
+
+		double extractVariance( PointType & pt )
 		{
 			double varianceValue = 0.0;
-			if (this->varianceFunc->IsInsideBuffer(pointSet[i]))
+			if (this->varianceFunc->IsInsideBuffer( pt ))
 			{
-				varianceValue = this->varianceFunc->Evaluate(pointSet[i]);
+				varianceValue = this->varianceFunc->Evaluate( pt );
 			}
-			featureSet.push_back( varianceValue );
+			return varianceValue;
+		}
+
+		void extractVarianceSet( FeatureSetType & featureSet )
+		{
+			featureSet.push_back(extractVariance(currentPoint));
 		}
 
 		void extractCoordinate( FeatureSetType & featureSet )
