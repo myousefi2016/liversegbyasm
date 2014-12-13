@@ -279,19 +279,14 @@ namespace km
 
 		LONGTYPE getRowsOfProfiles(int cluster_label = defaultClusterLabel)
 		{
-			if (cluster_label == defaultClusterLabel){
-				return this->profiles.rows();
-			}else{
-				LONGTYPE cnt = 0;
-				for (int ptid=0;ptid<this->clusterLabels.size();ptid++){
-					if (cluster_label == static_cast<int>(clusterLabels[ptid])) {
-						cnt++;
-					}
+			LONGTYPE cnt = 0;
+			for (int ptid=0;ptid<this->clusterLabels.size();ptid++){
+				if (cluster_label == static_cast<int>(clusterLabels[ptid])) {
+					cnt++;
 				}
-				return cnt*this->numberOfShapes*this->numberOfPointsEachShape*this->numberOfSamplesPerLandmark;
 			}
+			return cnt*this->numberOfShapes*this->numberOfSamplesPerLandmark;
 		}
-
 
 		void copyCluster(const ProfileContainer & source)
 		{
