@@ -422,15 +422,7 @@ namespace km
 			std::cout<<"*******************************************************************************"<<std::endl;
 
 			g_phase = DEFORMATION_BY_LIVER_PROFILE;
-
 			shapeTransform->SetUsedNumberOfCoefficients( numberOfMainProfileComponents );
-
-			unsigned int maxIterations = 20;
-			double rigidParaDiffTollerance = 0.002;
-			double shapeParaDiffTollerance = 0.03;
-			unsigned int iter_ellapsed = 0;
-
-			bool flagLooping = true;
 
 			MeshType::Pointer compositeFittedMesh = km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, compositeTransform );
 			km::loadSimplexMeshGeometryData<MeshType>(geoImage, compositeFittedMesh);
@@ -459,68 +451,49 @@ namespace km
 			ssmUtils.SetRigidTransform(rigidTransform);
 			ssmUtils.SetShapeTransform(shapeTransform);
 
-			MeshType::Pointer tmpMesh = MeshType::New();
+			unsigned int maxIterations = 20;
+			double rigidParaDiffTollerance = 0.002;
+			double shapeParaDiffTollerance = 0.03;
+			unsigned int iter_ellapsed = 0;
+			bool flagLooping = true;
 
+			MeshType::Pointer unfittedMesh = MeshType::New();
 			while ( flagLooping )
 			{
 				std::cout<<"********************************iteration: "<<iter_ellapsed<<"************************************"<<std::endl;
-
 				g_liverCentroid.CastFrom(km::getMeshCentroid<MeshType>(compositeFittedMesh));
 				rigidTransform->SetCenter( g_liverCentroid );
 
 				classifierUtils.deformByLiverClassification(bestMesh, compositeFittedMesh, 1.5, 20);
 
-				//Store rigid parameters before fitting.
-				RigidTransformType::ParametersType rigidParamPre = rigidTransform->GetParameters();
-				//Store shape parameters before fitting.
-				ShapeTransformType::ParametersType shapeParamPre = shapeTransform->GetParameters();
-
-				km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, tmpMesh, compositeTransform );
+				km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, unfittedMesh, compositeTransform );
 
 				KM_DEBUG_PRINT("Composite transform fitting...", iter_ellapsed);
 				ssmUtils.compositeTransformFitting(bestMesh);
-
+				
 				km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, compositeFittedMesh, compositeTransform );
 				km::ComputeGeometry<MeshType>( compositeFittedMesh, true );
 
-				classifierUtils.updateShapeNormals(tmpMesh, compositeFittedMesh);
-
-				//Store rigid parameters before fitting.
-				RigidTransformType::ParametersType rigidParamPost = rigidTransform->GetParameters();
-				//Store shape parameters before fitting.
-				ShapeTransformType::ParametersType shapeParamPost = shapeTransform->GetParameters();
+				classifierUtils.updateShapeNormals(unfittedMesh, compositeFittedMesh);
 
 				//Calculate shape parameters variance.
-				double shapeParamDiff = 0;
-				for (int p=0;p<shapeTransform->GetUsedNumberOfCoefficients();p++)
-				{
-					shapeParamDiff += std::abs(shapeParamPost[p]-shapeParamPre[p]);
-				}
-				shapeParamDiff /= shapeTransform->GetUsedNumberOfCoefficients();
+				double shapeParamDiff = ssmUtils.calShapeParaDiff();
+
 				KM_DEBUG_PRINT("SSM parameters difference", shapeParamDiff);
-				if (shapeParamDiff < shapeParaDiffTollerance && iter_ellapsed > 0)
-				{
+				if (shapeParamDiff < shapeParaDiffTollerance && iter_ellapsed > 0){
 					KM_DEBUG_INFO( "SSM parameters difference is smaller than tollerance. Stop fitting now.." );
 					flagLooping = false;
-				}
-				else if (iter_ellapsed >= maxIterations)
-				{
+				}else if (iter_ellapsed >= maxIterations){
 					KM_DEBUG_INFO( "Exceed maximum iteration number. Stop fitting now.." );
 					flagLooping = false;
 				}
 
-				std::cout<<"Rigid transform parameters: "<<rigidTransform->GetParameters()<<std::endl;
-				std::cout<<"Shape transform parameters: "<<shapeTransform->GetParameters()<<std::endl;
-
 				notifier->notify( compositeFittedMesh );
 				notifier->notify( bestMesh );
-
-				if (WRITE_MIDDLE_RESULT)
-				{
+				if (WRITE_MIDDLE_RESULT){
 					km::writeMesh<MeshType>(outputdir, "bestMesh", iter_ellapsed, ".vtk", bestMesh);
 					km::writeMesh<MeshType>(outputdir, "compositeFittedMesh", iter_ellapsed, ".vtk", compositeFittedMesh);
 				}
-
 				iter_ellapsed++;
 			}
 		}

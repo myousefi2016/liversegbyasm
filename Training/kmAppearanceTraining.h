@@ -258,9 +258,9 @@ namespace km
 					profileExtractor.extractFeatureSet(features, profileUnitBoundary.category, geodata, ipoint_inside);
 					profileUnitBoundary.writeLine(idx, IPClass, features);
 
-					//Plain
-					profileExtractor.extractFeatureSet(features, profileUnitPlain.category, geodata, ipoint_inside);
-					profileUnitPlain.writeLine(idx, IPClass, features);
+					////Plain
+					//profileExtractor.extractFeatureSet(features, profileUnitPlain.category, geodata, ipoint_inside);
+					//profileUnitPlain.writeLine(idx, IPClass, features);
 				}
 
 				//提取当前位置的Profile
