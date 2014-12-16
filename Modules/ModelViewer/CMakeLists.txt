@@ -1,6 +1,7 @@
-cmake_minimum_required(VERSION 2.8)
-PROJECT(ModelViewer)
-SET(CMAKE_VERBOSE_MAKEFILE ON)
+#LIB kmCommon
+MESSAGE(STATUS "Start to parse CMake file for ModelViewer..")
+MESSAGE(STATUS "Current dir: " ${CMAKE_CURRENT_SOURCE_DIR})
+MESSAGE(STATUS "Output dir: " ${LIBRARY_OUTPUT_PATH})
 
 SET( ModelViewr_SRCS
     main.cpp
@@ -28,10 +29,5 @@ ADD_EXECUTABLE( ModelViewer
 				${ModelViewr_UIS_H} 
 				${ModelViewr_MOC_SRCS} 
 				)
-TARGET_LINK_LIBRARIES( ModelViewer
-  QVTK
-  ${LiverSegSSM_LIRARIES}
-  ${ITK_LIBRARIES}
-  ${VTK_LIBRARIES}
-)
+TARGET_LINK_LIBRARIES( ModelViewer QVTK ${ITK_LIBRARIES} ${VTK_LIBRARIES} ${KM_LIBRARIES})
 

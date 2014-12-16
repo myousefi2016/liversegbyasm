@@ -19,26 +19,27 @@ include (${VTK_USE_FILE})
 FIND_PACKAGE(Qt4 REQUIRED)
 include (${QT_USE_FILE})
 
-MESSAGE(STATUS "Start to build 3rdParty libraries..")
-add_subdirectory(Modules/ACVD)
-add_subdirectory(Modules/AdaSegment)
-
+set(LiverSegSSM_SOURCE_DIR ${PROJECT_SOURCE_DIR})
 set(LiverSegSSM_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/Modules/itkAuxiliary
 							${PROJECT_SOURCE_DIR}/Modules/kmCommon
 							${PROJECT_SOURCE_DIR}/Modules/statismo
 							${PROJECT_SOURCE_DIR}/Modules/AdaSegment)
 
+MESSAGE(STATUS "Start to build 3rdParty libraries..")
+add_subdirectory(Modules/ACVD)
+add_subdirectory(Modules/kmCommon)
+add_subdirectory(Modules/AdaSegment)
+
+set(KM_LIBRARIES kmCommon)
 include_directories(${LiverSegSSM_INCLUDE_DIR})
-link_libraries(${ITK_LIBRARIES} ${VTK_LIBRARIES})
 
 add_library(LiverSegmentationAPI STATIC LiverSegmentationAPI.cpp)
-target_link_libraries (LiverSegmentationAPI)
+target_link_libraries (LiverSegmentationAPI ${ITK_LIBRARIES} ${VTK_LIBRARIES} ${KM_LIBRARIES} )
 
 add_executable(LiverSegmentation LiverSegmentation.cpp)
 target_link_libraries (LiverSegmentation LiverSegmentationAPI)
 
 #install(TARGETS LiverSegmentationAPI DESTINATION lib EXPORT LiverSegASM-targets)
-#add_subdirectory(Tools)
 add_subdirectory(Tests)
 add_subdirectory(Training)
 add_subdirectory(BuildingModel)

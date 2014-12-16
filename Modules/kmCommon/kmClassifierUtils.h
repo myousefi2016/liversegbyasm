@@ -8,19 +8,17 @@
 
 #include "itkSimplexMeshGeometry.h"
 
-#include "kmGlobal.h"
-#include "kmVtkItkUtility.h"
-#include "kmProfileClassifier.h"
 #include "kmProfileExtractor.h"
+#include "kmProfileClassifier.h"
 
 namespace km
 {
-	template< typename TMesh, typename TProfileExtractor>
+	template< class TMesh, class TProfileExtractor>
 	class ClassifierUtils
 	{
 	public:
 		typedef typename km::ProfileClassifier ClassifierType;
-		typedef typename TMesh MeshTpye;
+		typedef typename TMesh MeshType;
 		typedef typename MeshType::PointType PointType;
 		typedef typename PointType::VectorType VectorType;
 
@@ -34,10 +32,9 @@ namespace km
 		typedef typename TProfileExtractor ProfileExtractorType;
 
 		typedef itk::SimplexMeshGeometry SimplexMeshGeometryType;
-		typedef itk::SimplexMeshGeometry::VectorType VectorType;
 
-		typedef MeshType::GeometryMapType GeometryMapType;
-		typedef GeometryMapType::Iterator GeometryMapIterator;
+		typedef typename MeshType::GeometryMapType GeometryMapType;
+		typedef typename GeometryMapType::Iterator GeometryMapIterator;
 		
 		ClassifierUtils()
 		{

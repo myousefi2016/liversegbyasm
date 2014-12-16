@@ -18,7 +18,7 @@ PURPOSE.  See the above copyright notices for more information.
 #define __EuclideanDistanceKdTreeMultipleValuePointSetMetric_hxx
 
 #include "itkEuclideanDistanceKdTreeMultipleValuePointSetMetric.h"
-#include "kmMath.h"
+#include "kmUtility.h"
 
 namespace itk {
 

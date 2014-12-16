@@ -30,6 +30,7 @@
 
 #include "itkDeformableSimplexMesh3DFilter.h"
 #include "itkMesh.h"
+#include "itkImage.h"
 #include "itkConstNeighborhoodIterator.h"
 #include "itkCovariantVector.h"
 #include "itkLinearInterpolateImageFunction.h"
@@ -41,6 +42,15 @@
 
 #include <set>
 #include <map>
+
+#include "itkAffineTransform.h"
+#include "statismo_ITK/itkStatisticalShapeModelTransform.h"
+#include "kmGlobal.h"
+#include "kmProfileExtractor.h"
+#include "kmProfileClassifier.h"
+#include "kmSSMUtils.h"
+#include "kmUtility.h"
+#include "kmVtkItkUtility.h"
 
 namespace itk
 {
@@ -55,7 +65,7 @@ namespace itk
 	*
 	* \ingroup ITKDeformableMesh
 	*/
-	template< class TInputMesh, class TOutputMesh>
+	template< class TInputMesh, class TOutputMesh, class TInputImage, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	class ITK_EXPORT DeformableSimplexMesh3DWithShapePriorFilter
 		:public DeformableSimplexMesh3DFilter< TInputMesh, TOutputMesh >
 	{
@@ -97,32 +107,66 @@ namespace itk
 		typedef typename KdTreeType::InstanceIdentifierVectorType                NeighborhoodIdentifierType;
 
 		typedef typename InputMeshType::PixelType PixelType;
-
 		typedef SimplexMeshGeometry::CovariantVectorType NormalVectorType;
 
 		itkStaticConstMacro(Dimension, unsigned int, InputMeshType::PointDimension);
 
+		typedef typename TInputImage                  InputImageType;
+		typedef typename InputImageType::Pointer      InputImagePointer;
+		typedef typename InputImageType::ConstPointer InputImageConstPointer;
+
+		typedef typename TStatisticalModel                StatisticalModelType;
+		typedef typename TRigidTransform                  RigidTransformType;
+		typedef typename RigidTransformType::Pointer      RigidTransformPointer;
+		typedef typename RigidTransformType::ConstPointer RigidTransformConstPointer;
+		typedef typename TShapeTransform                  ShapeTransformType;
+		typedef typename ShapeTransformType::Pointer      ShapeTransformPointer;
+		typedef typename ShapeTransformType::ConstPointer ShapeTransformConstPointer;
+
+		typedef km::ProfileExtractor<InputImageType> ProfileExtractorType;
+		typedef km::SSMUtils<InputMeshType, 
+							 StatisticalModelType, 
+							 RigidTransformType, 
+							 ShapeTransformType>     SSMUtilsType;
+		typedef km::ProfileClassifier                ProfileClassifierType;
+
 		itkSetMacro(Kappa, double);
 		itkGetConstMacro(Kappa, double);
 
-		void SetTargetMesh( InputMeshType* TargetMesh )
+		itkSetConstObjectMacro( InputImage, InputImageType );
+		itkGetConstObjectMacro( InputImage, InputImageType );
+
+		itkSetObjectMacro( RigidTransform, RigidTransformType );
+		itkGetObjectMacro( RigidTransform, RigidTransformType );
+
+		itkSetObjectMacro( ShapeTransform, ShapeTransformType );
+		itkGetObjectMacro( ShapeTransform, ShapeTransformType );
+
+		void SetStatisticalModel(const StatisticalModelType* model)
 		{
-			m_TargetMesh = TargetMesh;
+			this->m_Model = model;
+		}
+		const StatisticalModelType* GetStatisticalModel()
+		{
+			return this->m_Model;
 		}
 
-		void SetShapeMesh( InputMeshType* shapeMesh )
+		void SetBoundaryClassifier(const ProfileClassifierType* c)
 		{
-			m_ShapeMesh = shapeMesh;
+			this->m_BoundaryClassifier = const_cast<ProfileClassifierType*>(c);
 		}
-		
-		void SetVarianceMap(InputMeshType* varianceMap)
+		ProfileClassifierType* GetBoundaryClassifier()
 		{
-			this->m_VarianceMap = varianceMap;
+			return this->m_BoundaryClassifier;
 		}
 
-		void SetP2p(bool flag)
+		void SetLiverClassifier(const ProfileClassifierType* c)
 		{
-			m_P2p = flag;
+			this->m_LiverClassifier = const_cast<ProfileClassifierType*>(c);
+		}
+		ProfileClassifierType* GetLiverClassifier()
+		{
+			return this->m_LiverClassifier;
 		}
 
 	protected:
@@ -149,24 +193,19 @@ namespace itk
 		*/
 		virtual void ComputeExternalForce(SimplexMeshGeometry *data, unsigned int indx);
 
-		/** Parameters definitions. */
-
 		/**
 		* scalar for balloon force
 		*/
 		double m_Kappa;
 		
-		InputMeshPointer m_VarianceMap;
-
-		InputMeshPointer m_TargetMesh;
-		typename SampleType::Pointer m_TargetSamplePoints;
-		typename TreeGeneratorType::Pointer m_TargetKdTreeGenerator;
-
-		InputMeshPointer m_ShapeMesh;
-		typename SampleType::Pointer m_ShapeSamplePoints;
-		typename TreeGeneratorType::Pointer m_ShapeKdTreeGenerator;
-
-		bool m_P2p;
+		const StatisticalModelType*  m_Model;
+		InputImageConstPointer       m_InputImage;
+		RigidTransformPointer        m_RigidTransform;
+		ShapeTransformPointer        m_ShapeTransform;
+		ProfileExtractorType         m_ProfileExtractor;
+		SSMUtilsType                 m_SSMUtils;
+		ProfileClassifierType*       m_BoundaryClassifier;
+		ProfileClassifierType*       m_LiverClassifier;
 	}; // end of class
 } // end namespace itk
 

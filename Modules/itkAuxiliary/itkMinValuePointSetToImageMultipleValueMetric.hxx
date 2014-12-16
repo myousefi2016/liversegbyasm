@@ -20,7 +20,7 @@
 
 #include "itkMinValuePointSetToImageMultipleValueMetric.h"
 #include "itkImageRegionConstIteratorWithIndex.h"
-#include "kmMath.h"
+#include "kmUtility.h"
 
 namespace itk
 {
@@ -137,7 +137,7 @@ MinValuePointSetToImageMultipleValueMetric< TFixedPointSet, TMovingPointSet >
 			//{
 			//	maxParam = std::abs(parameters[i]);
 			//}
-			shapeProbability += log( km::cdf_outside(std::abs(parameters[i])) + 1e-10 );
+			shapeProbability += log( km::Math::cdf_outside(std::abs(parameters[i])) + 1e-10 );
 		}
 		shapeProbability /= m_NumberOfShapeParameters;
 		//1e-6 is make sure the log take positive input.

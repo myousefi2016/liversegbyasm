@@ -2,16 +2,16 @@
 #define __kmSSMUtils_h
 
 #include "statismo/CommonTypes.h"
-#include "kmUtility.h"
+//#include "kmUtility.h"
 #include "kmGlobal.h"
 
 namespace km
 {
-	template< typename TMesh, typename TStatisticalModel, typename TRigidTransform, typename TShapeTransform>
+	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	class SSMUtils
 	{
 	public:
-		typedef typename TMesh                              MeshTpye;
+		typedef typename TMesh                              MeshType;
 		typedef typename MeshType::PointType                PointType;
 		typedef typename PointType::VectorType              VectorType;
 		typedef typename TRigidTransform                    RigidTransformType;
@@ -22,7 +22,7 @@ namespace km
 		typedef typename StatisticalModelType::ImplType     StatisticalModelImplType;
 		typedef statismo::MatrixType                        StatismoMatrixType;
 		typedef statismo::VectorType                        StatismoVectorType;
-		itkStaticConstMacro(PointDimension, unsigned int, MeshTpye::PointDimension);
+		itkStaticConstMacro(PointDimension, unsigned int, MeshType::PointDimension);
 		
 		SSMUtils()
 		{
@@ -127,6 +127,32 @@ namespace km
 			}
 			shapeParamDiff /= m_ShapeTransform->GetUsedNumberOfCoefficients();
 			return shapeParamDiff;
+		}
+
+		void initModelVariance()
+		{
+			//typedef itk::SimplexMeshGeometry SimplexMeshGeometryType;
+			//typedef SimplexMeshGeometryType::CovariantVectorType CovariantVectorType;
+
+			//SimplexMeshGeometryType *geodata;
+
+			//StatisticalModelType::MatrixType basisMatrix = model->GetPCABasisMatrix();
+			//for (int id=0;id<mesh->GetNumberOfPoints();id++)
+			//{
+			//	double variance = 0.0;
+			//	geodata = mesh->GetGeometryData()->GetElement(id);
+			//	for (unsigned p=0;p<numberOfComponents;p++)
+			//	{
+			//		double varOnNormal = 0.0;
+			//		for (unsigned d=0; d<Dimension; d++) 
+			//		{
+			//			unsigned idx = model->GetRepresenter()->MapPointIdToInternalIdx(id, d);
+			//			varOnNormal += geodata->normal[d] * basisMatrix[idx][p];
+			//		}
+			//		variance += std::abs(varOnNormal);
+			//	}
+			//	g_varianceMap[id] = variance;
+			//}
 		}
 	
 	private:

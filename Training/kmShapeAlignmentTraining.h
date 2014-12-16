@@ -1,25 +1,18 @@
-#ifndef __kmShapeTraining_h
-#define __kmShapeTraining_h
+#ifndef __kmShapeAlignmentTraining_h
+#define __kmShapeAlignmentTraining_h
 
 #include <iostream>
 #include <fstream>
 #include  <direct.h> 
 
 #include "itkImage.h"
-#include "itkEuler3DTransform.h"
-
-#include <itkScaleVersor3DTransform.h>
 #include "itkSimilarity3DTransform.h"
-#include "itkEuler3DTransform.h"
-#include "itkBSplineTransform.h"
 
 #include "itkDefaultDynamicMeshTraits.h"
 #include "itkMesh.h"
 #include "itkSimplexMesh.h"
 
-#include "kmUtility.h"
-#include "kmRegistration.h"
-#include "kmVtkItkUtility.h"
+#include "kmCommon.h"
 
 using namespace km;
 

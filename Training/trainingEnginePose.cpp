@@ -3,7 +3,6 @@
 #include "itkTimeProbesCollectorBase.h"
 #include "itkMemoryProbesCollectorBase.h"
 
-#include "kmUtility.h"
 #include "kmPoseTraining.h"
 
 /************************************************************************

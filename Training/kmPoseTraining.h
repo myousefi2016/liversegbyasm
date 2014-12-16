@@ -6,27 +6,16 @@
 #include  <direct.h> 
 
 #include "itkMatrix.h"
-
 #include "itkImage.h"
-#include "itkEuler3DTransform.h"
-
-#include "itkEuler3DTransform.h"
-#include "itkVersorRigid3DTransform.h"
-#include "itkScaleVersor3DTransform.h"
 #include "itkSimilarity3DTransform.h"
 #include "itkCenteredTransformInitializer.h"
-
 #include "itkDefaultDynamicMeshTraits.h"
 #include "itkMesh.h"
 #include "itkSimplexMesh.h"
 #include "vtkSmartPointer.h"
 #include "vtkPolyData.h"
 
-#include "kmUtility.h"
-#include "kmProcessing.h"
-#include "kmVtkItkUtility.h"
-#include "kmSegmentation.h"
-#include "kmRegistration.h"
+#include "kmCommon.h"
 
 #define  PI 3.14159265359
 
@@ -78,12 +67,6 @@ namespace km
 
 		UCharImageType::Pointer downRefLiverMask = km::resampleImage<UCharImageType>( refLiverMask, downspac, 0, 1 );
 		downRefLiverMask = km::binaryThresholdImage<UCharImageType, UCharImageType>( downRefLiverMask, 1, 255, 100, 0 );
-
-		//MeshType::Pointer refMesh = km::generateMeshFromBinary<UCharImageType, MeshType>( refLiverMask );
-		//refMesh = km::decimateMesh<MeshType>( refMesh );
-
-		////MeshType::PointType refCentroid = km::getCentroid<MeshType>( refMesh );
-		//UCharImageType::PointType refCentroid = km::getCentroid<UCharImageType>(refLiverMask);
 
 		std::stringstream origListFilename, segListFilename, rigidTransformListFilename;
 		origListFilename << outputDataDir << "\\aligned-origList.txt";

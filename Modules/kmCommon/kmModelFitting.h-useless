@@ -1,0 +1,211 @@
+#ifndef __kmModelFitting_h
+#define __kmModelFitting_h
+
+#include <map>
+
+#include "itkSimplexMesh.h"
+#include "Representers/ITK/itkSimplexMeshRepresenter.h"
+#include "statismo_ITK/itkStatisticalModel.h"
+
+#include "itkEuclideanDistanceKdTreeMultipleValuePointSetMetric.h"
+#include "itkEuclideanDistanceMultipleValuePointMetric.h"
+//#include <itkEuclideanDistancePointMetric.h>
+#include "itkLevenbergMarquardtOptimizer.h"
+#include "itkOnePlusOneEvolutionaryOptimizer.h"
+#include "itkNormalVariateGenerator.h"
+#include "itkPointSetToPointSetRegistrationMethod.h"
+
+#include "itkMinValuePointSetToImageMultipleValueMetric.h"
+#include "itkPointSetToImageMultipleValueRegistrationMethod.h"
+#include "itkPointSetToImageRegistrationMethod.h"
+
+#include "itkPointSetToPointSetSingleValueRegistrationMethod.h"
+#include "itkCorrespondingPointsEuclideanDistancePointMetric.h"
+#include "itkLBFGSBOptimizer.h"
+
+#include "itkLinearInterpolateImageFunction.h"
+
+#include "itkSimplexMeshGeometry.h"
+#include "itkConstNeighborhoodIterator.h"
+#include "itkCompositeTransform.h"
+#include "itkCovariantVector.h"
+
+#include "kmVtkItkUtility.h"
+#include "kmGlobal.h"
+#include "kmUtility.h"
+
+using namespace km;
+
+namespace km
+{
+	template<class OptimizerType>
+	class IterationStatusObserver : public itk::Command
+	{
+	public:
+		typedef  IterationStatusObserver   Self;
+		typedef  itk::Command             Superclass;
+		typedef  itk::SmartPointer<Self>  Pointer;
+		itkNewMacro( Self );
+		typedef const OptimizerType                     *OptimizerPointer;
+		void Execute(itk::Object *caller, const itk::EventObject & event)
+		{
+			Execute( (const itk::Object *)caller, event);
+		}
+		void Execute(const itk::Object * object, const itk::EventObject & event)
+		{
+			OptimizerPointer optimizer = dynamic_cast< OptimizerPointer >( object );
+			if( ! itk::IterationEvent().CheckEvent( &event ) )
+			{
+				return;
+			}
+			std::cout << "Iteration: " << ++m_iter_no << " , Metric: " << optimizer->GetValue() << ", Parameters: " << optimizer->GetCachedCurrentPosition() << std::endl;
+			//std::cout << "Iteration: " << ++m_iter_no << " , Metric: " << optimizer->GetValue() << std::endl;
+		}
+	protected:
+		IterationStatusObserver():
+			 m_iter_no(0)     {};
+			 virtual ~IterationStatusObserver(){};
+	private:
+		int m_iter_no;
+	};
+
+	//enum FittingType
+	//{
+	//	Rigid = 0,
+	//	Shape
+	//};
+
+	//void initAbnormalMap(unsigned int N, bool reset = false)
+	//{
+	//	if (g_fittingErrorMap.size()==N && !reset)
+	//	{
+	//		return;
+	//	}
+	//	else
+	//	{
+	//		for (int idx=0;idx<N;idx++)
+	//		{
+	//			g_fittingErrorMap[idx] = 0.0;
+	//		}
+	//	}
+	//}
+
+	//bool isAbnormal(int idx)
+	//{
+	//	return g_fittingErrorMap[idx]>=g_fitting_error_threshold?true:false;
+	//}
+
+	//unsigned int countAbnormal()
+	//{
+	//	unsigned int count = 0;
+	//	for (int idx=0;idx<g_fittingErrorMap.size();idx++)
+	//	{
+	//		if(isAbnormal(idx)) count++;
+	//	}
+	//	return count;
+	//}
+
+	//template<class MatrixType>
+	//void
+	//	removeAbnormal(const typename MatrixType & matrix, typename MatrixType& matrixUpdated, FittingType rigidOrShape)
+	//{
+	//	if (countAbnormal() == 0)
+	//	{
+	//		matrixUpdated = matrix;
+	//		return;
+	//	}
+
+	//	unsigned int Dimension = 3;
+	//	if (rigidOrShape == Rigid)
+	//	{
+	//		unsigned int numberOfLandmarks = matrix.rows();
+	//		unsigned int numberOfAbnormal = countAbnormal();
+	//		matrixUpdated.setZero(numberOfLandmarks-numberOfAbnormal, matrix.cols());
+	//		unsigned long ptcount = 0;
+	//		for (int idx=0;idx<numberOfLandmarks;idx++)
+	//		{
+	//			if (!isAbnormal(idx))
+	//			{
+	//				for (int c=0;c<matrix.cols();c++)
+	//				{
+	//					matrixUpdated(ptcount, c) = matrix(idx, c);
+	//				}
+	//				ptcount++;
+	//			}
+	//		}
+	//		KM_ASSERT(ptcount == matrixUpdated.rows());
+	//	}
+	//	else
+	//	{
+	//		unsigned int numberOfLandmarks = matrix.rows()/Dimension;
+	//		unsigned int numberOfAbnormal = countAbnormal();
+	//		matrixUpdated.setZero((numberOfLandmarks-numberOfAbnormal)*Dimension, matrix.cols());
+	//		unsigned long ptcount = 0;
+	//		for (int idx=0;idx<numberOfLandmarks;idx++)
+	//		{
+	//			if (!isAbnormal(idx))
+	//			{
+	//				for (int d=0;d<Dimension;d++)
+	//				{
+	//					for (int c=0;c<matrix.cols();c++)
+	//					{
+	//						matrixUpdated(ptcount*Dimension+d, c) = matrix(idx*Dimension+d, c);
+	//					}
+	//				}
+	//				ptcount++;
+	//			}
+	//		}
+	//		KM_ASSERT(ptcount*Dimension == matrixUpdated.rows());
+	//	}
+
+	//	//KM_DEBUG_PRINT("Matrix rows before removing ", matrix.rows());
+	//	//KM_DEBUG_PRINT("Matrix rows after removing ", matrixUpdated.rows());
+	//}
+
+	//template<class MeshType>
+	//void
+	//	updateFittingErrorMap(
+	//	const typename MeshType * tagetMesh,
+	//	const typename MeshType * unfittedMesh,
+	//	const typename MeshType * fittedMesh)
+	//{
+	//	KM_ASSERT(tagetMesh->GetNumberOfPoints() == unfittedMesh->GetNumberOfPoints());
+
+	//	typedef MeshType::PointType PointType;
+	//	typedef PointType::VectorType VectorType;
+	//	for (int idx=0;idx<tagetMesh->GetNumberOfPoints();idx++)
+	//	{			
+	//		PointType targetPoint = tagetMesh->GetPoint(idx);
+	//		PointType unfittedPoint = unfittedMesh->GetPoint(idx);
+	//		PointType fittedPoint = fittedMesh->GetPoint(idx);
+
+	//		double errorUpdated = 0.0;
+	//		double unfittedDist = unfittedPoint.EuclideanDistanceTo(targetPoint);
+
+	//		if (isAbnormal(idx))
+	//		{
+	//			errorUpdated = 0.0;
+	//		}
+	//		else if (unfittedDist < 5.0)
+	//		{
+	//			errorUpdated = 0.0;
+	//		}
+	//		else
+	//		{
+	//			double fittedDist = fittedPoint.EuclideanDistanceTo(targetPoint);
+	//			errorUpdated = fittedDist / unfittedDist;
+	//		}
+
+	//		g_fittingErrorMap[idx] = g_fittingErrorMap[idx]*0.8 + errorUpdated*0.2;
+	//	}
+
+	//	unsigned int abnormalCount = countAbnormal();
+	//	if (abnormalCount > g_fittingErrorMap.size() * 0.25)
+	//	{
+	//		KM_DEBUG_ERROR("Abnormal points has exceed 25%");
+	//		//initAbnormalMap(g_fittingErrorMap.size(), true);
+	//	}
+	//}
+}
+
+#endif

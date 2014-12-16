@@ -49,7 +49,7 @@
 #include <errno.h>
 #include <iostream>
 
-#include "kmUtility.h"
+#include "kmCommon.h"
 
 /*
 * This example shows the ITK Wrapping of statismo can be used to build a shape model.

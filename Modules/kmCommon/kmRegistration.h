@@ -25,22 +25,19 @@
 #include <itkScaleSkewVersor3DTransform.h>
 #include <itkOnePlusOneEvolutionaryOptimizer.h>
 #include <itkNormalVariateGenerator.h>
-
 #include "itkMultiResolutionImageRegistrationMethod.h"
 #include "itkMultiResolutionPyramidImageFilter.h"
 #include "itkMattesMutualInformationImageToImageMetric.h"
 #include "itkMattesMutualInformationWithProbabilityImageToImageMetric.h"
 #include "itkMeanSquaresImageToImageMetric.h"
 #include "itkBSplineTransformInitializer.h"
-
 #include "itkResampleImageFilter.h"
 #include "itkBSplineResampleImageFunction.h"
-
 #include "itkPointSetToPointSetRegistrationMethod.h"
 #include "itkLevenbergMarquardtOptimizer.h"
 #include "itkEuclideanDistanceMultipleValuePointMetric.h"
-
-#include "kmUtility.h"
+#include "itkMinValuePointSetToImageMultipleValueMetric.h"
+#include "itkPointSetToImageMultipleValueRegistrationMethod.h"
 
 namespace km 
 {
@@ -127,35 +124,21 @@ namespace km
 		const typename MovingImageType* movingImage,
 		typename TTransform::Pointer &  transform)
 	{
-		kmStaticImageMacro(ImageType);
 		itkStaticConstMacro(Dimension, unsigned int, ImageType::ImageDimension);
-
-		typedef typename TTransform                            TransformType;
-		typedef typename TransformType::Pointer                TransformPointer;
-		typedef itk::OnePlusOneEvolutionaryOptimizer           OptimizerType;
-		typedef typename OptimizerType::Pointer                OptimizerPointer;
-		typedef itk::MeanSquaresImageToImageMetric< 
-			ImageType, 
-			MovingImageType>                                     MetricType;
-		typedef typename MetricType::Pointer                   MetricPointer;
-		typedef itk::MultiResolutionImageRegistrationMethod< 
-			ImageType, 
-			MovingImageType >                                    RegistrationType;
-		typedef typename RegistrationType::Pointer             RegistrationPointer;
-
-		typedef itk::MultiResolutionPyramidImageFilter<
-			ImageType,
-			MovingImageType >                                    FixedImagePyramidType;
-		typedef itk::MultiResolutionPyramidImageFilter<
-			ImageType,
-			MovingImageType >                                    MovingImagePyramidType;
-		typedef itk::LinearInterpolateImageFunction<
-			MovingImageType>                                     InterpolatorType;
-		typedef typename InterpolatorType::Pointer             InterpolatorPointer;
-
+		typedef typename TTransform TransformType;
+		typedef typename TransformType::Pointer TransformPointer;
+		typedef itk::OnePlusOneEvolutionaryOptimizer OptimizerType;
+		typedef typename OptimizerType::Pointer OptimizerPointer;
+		typedef itk::MeanSquaresImageToImageMetric< ImageType, MovingImageType> MetricType;
+		typedef typename MetricType::Pointer MetricPointer;
+		typedef itk::MultiResolutionImageRegistrationMethod< ImageType, MovingImageType > RegistrationType;
+		typedef typename RegistrationType::Pointer RegistrationPointer;
+		typedef itk::MultiResolutionPyramidImageFilter<ImageType, MovingImageType > FixedImagePyramidType;
+		typedef itk::MultiResolutionPyramidImageFilter<ImageType, MovingImageType > MovingImagePyramidType;
+		typedef itk::LinearInterpolateImageFunction<MovingImageType> InterpolatorType;
+		typedef typename InterpolatorType::Pointer InterpolatorPointer;
 		try 
 		{ 
-
 			//TransformPointer	      transform     = TransformType::New();
 			OptimizerPointer		    optimizer     = OptimizerType::New();
 			RegistrationPointer		  registration  = RegistrationType::New();
@@ -176,12 +159,6 @@ namespace km
 
 			ImageType::RegionType fixedRegion   = fixedImage->GetLargestPossibleRegion();
 			registration->SetFixedImageRegion( fixedRegion );
-
-			//unsigned int nBins = 128;
-			//MetricType::HistogramType::SizeType histSize;
-			//histSize.SetSize( 3 );
-			//histSize.Fill( nBins );
-			//metric->SetHistogramSize(histSize);
 
 			typedef itk::Statistics::NormalVariateGenerator  GeneratorType;
 			GeneratorType::Pointer generator = GeneratorType::New();
@@ -227,175 +204,6 @@ namespace km
 		}
 	}
 
-	template<class MeshType, class TransformType>
-	void
-		eulerRegistrationMeshToMesh(
-		const typename MeshType * fixedMesh,
-		const typename MeshType * movingMesh,
-		typename TransformType::Pointer & transform,
-		const std::vector<double> & _scales,
-		unsigned int maxiterations = 500)
-	{
-		typedef itk::PointSetToPointSetRegistrationMethod<MeshType, MeshType>           RegistrationMethodType;
-		typedef itk::EuclideanDistanceKdTreeMultipleValuePointSetMetric<MeshType>       MetricType;
-		typedef itk::LevenbergMarquardtOptimizer                                        OptimizerType;
-
-		OptimizerType::Pointer          optimizer = OptimizerType::New();
-		MetricType::Pointer             metric = MetricType::New();
-		RegistrationMethodType::Pointer registration = RegistrationMethodType::New();
-
-		//Metric
-		metric->SetWeightForShapePenalty( 0.0 );
-
-		//Optimizer
-		int N = transform->GetNumberOfParameters();
-		OptimizerType::ScalesType scales( N );
-		for ( int i=0;i<N;i++ )
-		{
-			scales[i] = _scales[i];
-		}
-		//std::cout<<"Optimize scale: "<<scales<<std::endl;
-		optimizer->SetScales( scales );
-		optimizer->SetNumberOfIterations( maxiterations );
-		optimizer->SetUseCostFunctionGradient( false );
-		optimizer->SetGradientTolerance( 1e-5 );
-		optimizer->SetValueTolerance( 1e-6 );
-		optimizer->SetEpsilonFunction( 1e-11);
-
-		//Registration
-		registration->SetMetric(    metric );
-		registration->SetOptimizer( optimizer );
-		registration->SetTransform( transform );
-		registration->SetInitialTransformParameters( transform->GetParameters() );
-		registration->SetFixedPointSet(  fixedMesh  );
-		registration->SetMovingPointSet( movingMesh );
-
-		try 
-		{
-			std::cout << "starting model fitting" << std::endl;
-			registration->Update();
-			std::cout << optimizer->GetStopConditionDescription() << std::endl;
-
-		}
-		catch ( itk::ExceptionObject& o ) 
-		{
-			std::cout << "caught exception " << o << std::endl;
-		}
-	}
-
-
-	template < typename ImageType, typename MovingImageType, typename TTransform >
-	void
-		eulerRegistrationImageToImage( const typename ImageType* fixedImage, 
-		const typename MovingImageType* movingImage,
-		typename TTransform::Pointer &  transform)
-	{
-		kmStaticImageMacro(ImageType);
-		itkStaticConstMacro(Dimension, unsigned int, ImageType::ImageDimension);
-
-		typedef typename TTransform                            TransformType;
-		typedef typename TransformType::Pointer                TransformPointer;
-		typedef itk::RegularStepGradientDescentOptimizer       OptimizerType;
-		typedef typename OptimizerType::Pointer                OptimizerPointer;
-		typedef itk::MattesMutualInformationImageToImageMetric< 
-			ImageType, 
-			MovingImageType>                                     MetricType;
-		typedef typename MetricType::Pointer                   MetricPointer;
-		typedef itk::MultiResolutionImageRegistrationMethod< 
-			ImageType, 
-			MovingImageType >                                    RegistrationType;
-		typedef typename RegistrationType::Pointer             RegistrationPointer;
-
-		typedef itk::MultiResolutionPyramidImageFilter<
-			ImageType,
-			MovingImageType >                                    FixedImagePyramidType;
-		typedef itk::MultiResolutionPyramidImageFilter<
-			ImageType,
-			MovingImageType >                                    MovingImagePyramidType;
-		typedef itk::LinearInterpolateImageFunction<
-			MovingImageType>                                     InterpolatorType;
-		typedef typename InterpolatorType::Pointer             InterpolatorPointer;
-
-		//TransformPointer	      transform     = TransformType::New();
-		OptimizerPointer		    optimizer     = OptimizerType::New();
-		RegistrationPointer		  registration  = RegistrationType::New();
-		MetricPointer		        metric        = MetricType::New();
-		InterpolatorPointer     iterpolator   = InterpolatorType::New();
-
-		FixedImagePyramidType::Pointer fixedImagePyramid = FixedImagePyramidType::New();
-		MovingImagePyramidType::Pointer movingImagePyramid = MovingImagePyramidType::New();
-
-		registration->SetInterpolator(  iterpolator   );
-		registration->SetOptimizer(     optimizer     );
-		registration->SetTransform(     transform     );
-		registration->SetMetric(        metric  );
-		registration->SetFixedImage(    fixedImage   );
-		registration->SetMovingImage(   movingImage   );
-		registration->SetFixedImagePyramid( fixedImagePyramid );
-		registration->SetMovingImagePyramid( movingImagePyramid );
-
-		ImageType::RegionType fixedRegion   = fixedImage->GetLargestPossibleRegion();
-
-		registration->SetFixedImageRegion( fixedRegion );
-
-		const unsigned int numberOfSamples = static_cast<unsigned int>( fixedRegion.GetNumberOfPixels() * 0.05 );
-		metric->SetNumberOfSpatialSamples( numberOfSamples );
-		metric->SetNumberOfHistogramBins( 24 );
-		metric->ReinitializeSeed( 123456 );
-
-		typedef typename OptimizerType::ScalesType       OptimizerScalesType;
-		OptimizerScalesType optimizerScales( transform->GetNumberOfParameters() );
-
-		if (Dimension==3)
-		{
-			optimizerScales[0]   =  1000;
-			optimizerScales[1]   =  1000;
-			optimizerScales[2]   =  1.0;
-			optimizerScales[3]   =  0.001;
-			optimizerScales[4]   =  0.001;
-			optimizerScales[5]   =  0.001;
-		}
-		else if(Dimension == 2)
-		{
-			optimizerScales[0]   =  1.0;
-			optimizerScales[1]   =  0.001;
-			optimizerScales[2]   =  0.001;
-		}
-
-		optimizer->SetScales( optimizerScales );
-		optimizer->SetMaximumStepLength( 1.0 );
-		optimizer->SetMinimumStepLength( 0.001 );
-		optimizer->SetRelaxationFactor( 0.6 );
-		optimizer->SetNumberOfIterations( 200 );
-		optimizer->SetGradientMagnitudeTolerance( 1e-3 );
-
-		registration->SetInitialTransformParameters(  transform->GetParameters()  );
-		registration->SetNumberOfLevels( 2 );
-
-		//RegistrationCommandResolutionUpdate<RegistrationType>::Pointer registrationObserver = 
-		//	RegistrationCommandResolutionUpdate<RegistrationType>::New();
-		//registration->AddObserver( itk::IterationEvent(), registrationObserver );
-
-		//OptimizerCommandIterationUpdate<OptimizerType>::Pointer optimizerObserver = 
-		//	OptimizerCommandIterationUpdate<OptimizerType>::New();
-		//optimizer->AddObserver( itk::IterationEvent(), optimizerObserver );
-
-		try 
-		{ 
-
-			registration->Update(); 
-			//std::cout<<optimizer->GetStopConditionDescription()<<std::endl;
-		}
-		catch( itk::ExceptionObject & err ) 
-		{ 
-			std::cout << "Exception thrown ! " << std::endl;
-			std::cout << "An error ocurred during Optimization" << std::endl;
-			std::cout << "Location    = " << err.GetLocation()    << std::endl;
-			std::cout << "Description = " << err.GetDescription() << std::endl;
-		}
-	}
-
-
 	template < typename FixedImageType, typename MovingImageType, typename TransformType >
 	void
 		ProcrustesAlignment( 
@@ -416,7 +224,6 @@ namespace km
 			FixedImageType, 
 			MovingImageType >                                  RegistrationType;
 		typedef typename RegistrationType::Pointer             RegistrationPointer;
-
 		typedef itk::MultiResolutionPyramidImageFilter<
 			FixedImageType,
 			MovingImageType >                                    FixedImagePyramidType;
@@ -437,8 +244,6 @@ namespace km
 		FixedImageType::RegionType fixedRegion = fixedImage->GetLargestPossibleRegion();
 
 		//Metric
-		//metric->SetForegroundValue( 1 );
-		//metric->SetComplement(true);
 		const unsigned int numberOfSamples = static_cast<unsigned int>( fixedRegion.GetNumberOfPixels() * 0.05 );
 		metric->SetNumberOfSpatialSamples( numberOfSamples );
 
@@ -446,11 +251,9 @@ namespace km
 		typedef typename OptimizerType::ScalesType       OptimizerScalesType;
 		OptimizerScalesType optimizerScales( transform->GetNumberOfParameters() );
 		
-		for (int i=0;i<transform->GetNumberOfParameters();i++)
-		{
+		for (int i=0;i<transform->GetNumberOfParameters();i++){
 			optimizerScales[i] = _scales[i];
 		}
-
 		optimizer->SetScales( optimizerScales );
 		optimizer->SetMaximumStepLength( 0.15 );
 		optimizer->SetMinimumStepLength( 0.01 );
@@ -471,20 +274,13 @@ namespace km
 		registration->SetInterpolator( interpolator );
 		registration->SetInitialTransformParameters(  transform->GetParameters()  );
 
-		//std::cout<<transform->GetParameters()<<std::endl;
-		//std::cout<<transform->GetFixedParameters()<<std::endl;
-
 		OptimizerCommandIterationUpdate<OptimizerType>::Pointer observer = OptimizerCommandIterationUpdate<OptimizerType>::New();
 		optimizer->AddObserver( itk::IterationEvent(), observer );
-
-		try 
-		{ 
+		try { 
 			std::cout<<"Start to euler registration.." <<std::endl;
 			registration->Update(); 
 			std::cout<<optimizer->GetStopConditionDescription()<<std::endl;
-		}
-		catch( itk::ExceptionObject & err ) 
-		{ 
+		}catch( itk::ExceptionObject & err ) { 
 			std::cout << "Exception thrown ! " << std::endl;
 			std::cout << "An error ocurred during Optimization" << std::endl;
 			std::cout << "Location    = " << err.GetLocation()    << std::endl;
@@ -497,7 +293,6 @@ namespace km
 		elasticRegistrationImageToImage( 
 		typename ImageType::Pointer & fixedImage, 
 		typename ImageType::Pointer & movingImage,
-		//typename MeshType::Pointer & mesh,
 		typename TransformType::Pointer & transform,
 		unsigned int bsplineMeshSize = 5,
 		const char* probabilityImageFile = NULL)
@@ -505,46 +300,25 @@ namespace km
 		itkStaticConstMacro(Dimension, unsigned int, ImageType::ImageDimension);
 		const unsigned int SplineOrder = 3;
 
-		typedef itk::MultiResolutionImageRegistrationMethod< 
-			ImageType, 
-			ImageType >                                                 RegistrationType;
+		typedef itk::MultiResolutionImageRegistrationMethod< ImageType, ImageType > RegistrationType;
 
-		typedef itk::MultiResolutionPyramidImageFilter<
-			ImageType,
-			ImageType >                                                 ImagePyramidType;
-		typedef itk::MattesMutualInformationWithProbabilityImageToImageMetric< 
-			ImageType,
-			ImageType>                                                  MetricType;
-		typedef itk::LBFGSBOptimizer/*RegularStepGradientDescentOptimizer*/    OptimizerType;
-		//typedef itk::BSplineTransform<double,Dimension>               TransformType;
-		typedef itk::LinearInterpolateImageFunction<ImageType>        InterpolatorType;
-		typedef typename TransformType::ParametersType                ParametersType;
+		typedef itk::MultiResolutionPyramidImageFilter<ImageType, ImageType > ImagePyramidType;
+		typedef itk::MattesMutualInformationWithProbabilityImageToImageMetric< ImageType,ImageType> MetricType;
+		typedef itk::LBFGSBOptimizer OptimizerType;
+		typedef itk::LinearInterpolateImageFunction<ImageType> InterpolatorType;
+		typedef typename TransformType::ParametersType ParametersType;
 
 		RegistrationType::Pointer registration = RegistrationType::New();
 		MetricType::Pointer       metric       = MetricType::New();
 		OptimizerType::Pointer    optimizer    = OptimizerType::New();
-		//TransformType::Pointer    transform    = TransformType::New();
 		InterpolatorType::Pointer interpolator = InterpolatorType::New();
 		ImagePyramidType::Pointer fixedImagePyramid = ImagePyramidType::New();
 		ImagePyramidType::Pointer movingImagePyramid = ImagePyramidType::New();
 
 		ImageType::RegionType fixedRegion = fixedImage->GetLargestPossibleRegion();
-		
-		//ImageType::RegionType roiRegion;
-		//ImageType::Pointer addImage = km::addImage<ImageType, ImageType, ImageType>( fixedImage, movingImage );
-		//km::getBoundRegion<ImageType>( addImage, roiRegion, 0, 30 );
-
 		registration->SetFixedImageRegion( fixedRegion );
 
 		//Tranform
-		//typedef itk::BSplineTransformInitializer< TransformType, ImageType >      InitializerType;
-		//InitializerType::Pointer transformInitializer = InitializerType::New();
-		//transformInitializer->SetTransform( transform );
-		//transformInitializer->SetImage( fixedImage );
-		//transformInitializer->InitializeTransform();
-		//TransformType::MeshSizeType meshSize;
-		//meshSize.Fill( bsplineMeshSize );
-		//transform->SetTransformDomainMeshSize( meshSize );
 		TransformType::PhysicalDimensionsType   fixedPhysicalDimensions;
 		TransformType::MeshSizeType             meshSize;
 		TransformType::OriginType               fixedOrigin;
@@ -560,20 +334,17 @@ namespace km
 		transform->SetTransformDomainMeshSize( meshSize );
 		transform->SetTransformDomainDirection( fixedImage->GetDirection() );
 
-
 		//Metric
 		const unsigned int numberOfSamples = static_cast<unsigned int>( fixedRegion.GetNumberOfPixels() * 0.01 );
 		metric->SetNumberOfSpatialSamples( numberOfSamples );
 		metric->SetNumberOfHistogramBins( 24 );
 		metric->ReinitializeSeed( 7654321 );
 
-		if (probabilityImageFile)
-		{
+		if (probabilityImageFile){
 			typedef MetricType::ProbabilityImageType ProbabilityImageType;
 			ProbabilityImageType::Pointer probimage = km::readImage<ProbabilityImageType>( probabilityImageFile );
 			metric->SetProbabilityImage( probimage );
 		}
-
 
 		//Optimizer
 		OptimizerType::BoundSelectionType boundSelect( transform->GetNumberOfParameters() );
@@ -591,11 +362,6 @@ namespace km
 		optimizer->SetMaximumNumberOfEvaluations( 200 );
 		optimizer->SetMaximumNumberOfCorrections( 7 );
 		optimizer->TraceOn();
-		//optimizer->SetGradientMagnitudeTolerance(1e-5);
-		//optimizer->SetMaximumStepLength( 5 );
-		//optimizer->SetMinimumStepLength( 0.5 );
-		//optimizer->SetRelaxationFactor( 0.5 );
-		//optimizer->SetNumberOfIterations( 200 );
 
 		//Registration
 		registration->SetMetric(        metric        );
@@ -607,301 +373,42 @@ namespace km
 		registration->SetFixedImage(    fixedImage   );
 		registration->SetMovingImage(   movingImage   );
 		registration->SetInitialTransformParameters( transform->GetParameters() );
-
 		registration->SetNumberOfLevels( 3 );
-
-		//RegistrationCommandResolutionUpdate<RegistrationType>::Pointer registrationObserver = 
-		//	RegistrationCommandResolutionUpdate<RegistrationType>::New();
-		//registration->AddObserver( itk::IterationEvent(), registrationObserver );
-
-		//OptimizerCommandIterationUpdate<OptimizerType>::Pointer optimizerObserver = 
-		//	OptimizerCommandIterationUpdate<OptimizerType>::New();
-		//optimizer->AddObserver( itk::IterationEvent(), optimizerObserver );
-
-
-		try 
-		{
+		try {
 			std::cout<<"Start to elastic registration( coarse ).." <<std::endl;
 			registration->Update(); 
 			std::cout<<"optimization stoped because: "<<optimizer->GetStopConditionDescription()<<std::endl;
-		} 
-		catch( itk::ExceptionObject & err ) 
-		{ 
+		} catch( itk::ExceptionObject & err ) { 
 			std::cout << "ExceptionObject caught !" << std::endl; 
 			std::cout << err << std::endl; 
 		}
-
 		ParametersType finalParams = registration->GetLastTransformParameters();
-
 		double max = -999;
 		double min = 999;
-		for (int i=0;i<transform->GetNumberOfParameters();i++)
-		{
-			if (finalParams[i] > max)
-			{
+		for (int i=0;i<transform->GetNumberOfParameters();i++){
+			if (finalParams[i] > max){
 				max = finalParams[i];
 			}
-			if (finalParams[i] < min)
-			{
+			if (finalParams[i] < min){
 				min = finalParams[i];
 			}
 		}
 		std::cout<<"result*********** max:"<<max<<", min:"<<min<<std::endl;
 	}
 
-	
-	template< typename ImageType, typename MeshType, typename TransformType>
-	void
-		elasticRegistration( 
-		typename ImageType::Pointer & fixedImage, 
-		typename MeshType::Pointer & movingMesh,
-		typename TransformType::Pointer & transform,
-		unsigned int bsplineMeshSize = 5)
-	{
-		itkStaticConstMacro(Dimension, unsigned int, ImageType::ImageDimension);
-		itkStaticConstMacro(SplineOrder, unsigned int, 3);
-		typedef double CoordinateRepType;
-
-		typedef itk::Image<float, Dimension> FloatImageType;
-		FloatImageType::Pointer fixedDistanceMap = km::calculateDistanceMap<ImageType, FloatImageType>( fixedImage );
-		fixedDistanceMap = km::shiftScale<FloatImageType>( fixedDistanceMap, -1.0, 1.0 );
-		fixedDistanceMap = km::absImage<FloatImageType>( fixedDistanceMap );
-
-		//km::writeImage<FloatImageType>( "dm.nii.gz", fixedDistanceMap );
-
-		typedef itk::PointSetToImageRegistrationMethod< 
-			MeshType,
-			FloatImageType>                                             RegistrationType;
-		typedef itk::MeanSquaresPointSetToImageMetric< 
-			MeshType,
-			FloatImageType>                                             MetricType;
-		typedef itk::LBFGSBOptimizer                                  OptimizerType;
-		//typedef itk::BSplineTransform<double,Dimension>               TransformType;
-		typedef itk::LinearInterpolateImageFunction<FloatImageType>   InterpolatorType;
-		typedef typename TransformType::ParametersType                ParametersType;
-
-		RegistrationType::Pointer registration = RegistrationType::New();
-		MetricType::Pointer       metric       = MetricType::New();
-		OptimizerType::Pointer    optimizer    = OptimizerType::New();
-		//TransformType::Pointer    transform    = TransformType::New();
-		InterpolatorType::Pointer interpolator = InterpolatorType::New();
-
-		//Registration
-		registration->SetMetric(        metric        );
-		registration->SetOptimizer(     optimizer     );
-		registration->SetTransform(     transform     );
-		registration->SetFixedPointSet( movingMesh   );
-		registration->SetMovingImage(   fixedDistanceMap  );
-		registration->SetInterpolator(  interpolator );
-
-		//Metric
-
-		//Tranform
-		typedef itk::BSplineTransformInitializer< TransformType, ImageType >      InitializerType;
-		InitializerType::Pointer transformInitializer = InitializerType::New();
-		transformInitializer->SetTransform( transform );
-		transformInitializer->SetImage( fixedImage );
-		transformInitializer->InitializeTransform();
-		TransformType::MeshSizeType meshSize;
-		meshSize.Fill( bsplineMeshSize );
-		transform->SetTransformDomainMeshSize( meshSize );
-
-		registration->SetInitialTransformParameters( transform->GetParameters() );
-
-		//Optimizer
-		//std::cout<<transform->GetNumberOfParameters()<<std::endl;
-		OptimizerType::BoundSelectionType boundSelect( transform->GetNumberOfParameters() );
-		OptimizerType::BoundValueType upperBound( transform->GetNumberOfParameters() );
-		OptimizerType::BoundValueType lowerBound( transform->GetNumberOfParameters() );
-		boundSelect.Fill( 0 );
-		upperBound.Fill( 50 );
-		lowerBound.Fill( -50 );
-		optimizer->SetBoundSelection( boundSelect );
-		optimizer->SetUpperBound( upperBound );
-		optimizer->SetLowerBound( lowerBound );
-		optimizer->SetCostFunctionConvergenceFactor( 1.e7 );
-		optimizer->SetProjectedGradientTolerance( 1e-5);
-		optimizer->SetMaximumNumberOfIterations( 100 );
-		optimizer->SetMaximumNumberOfEvaluations( 200 );
-		optimizer->SetMaximumNumberOfCorrections( 7 );
-		optimizer->TraceOn();
-		/*optimizer->SetGradientMagnitudeTolerance(1e-5);
-		optimizer->SetMaximumStepLength( 10.0 );
-		optimizer->SetMinimumStepLength( 1.0 );
-		optimizer->SetRelaxationFactor( 0.5 );
-		optimizer->SetNumberOfIterations( 300 );
-		OptimizerType::ScalesType scales( transform->GetNumberOfParameters() );
-		scales.Fill( 1.0 );
-		optimizer->SetScales( scales );*/
-
-		OptimizerCommandIterationUpdate<OptimizerType>::Pointer optimizerObserver = 
-			OptimizerCommandIterationUpdate<OptimizerType>::New();
-		optimizer->AddObserver( itk::IterationEvent(), optimizerObserver );
-
-		try 
-		{
-			std::cout<<"Start to elastic registration.."<<std::endl;
-			registration->Update(); 
-			std::cout<<"optimization stoped because: "<<optimizer->GetStopConditionDescription()<<std::endl;
-		} 
-		catch( itk::ExceptionObject & err ) 
-		{ 
-			std::cout << "ExceptionObject caught !" << std::endl; 
-			std::cout << err << std::endl; 
-		}
-
-		transform->SetParameters(registration->GetLastTransformParameters());
-	}
-
-	template<class ImageType, class TransformType>
-	void
-		alignWithAtlas( typename ImageType* inputImage, typename ImageType* atlasImage, typename TransformType::Pointer & finaltransform )
-	{
-		kmStaticImageMacro(ImageType);
-		itkStaticConstMacro(Dimension, unsigned int, ImageType::ImageDimension);
-
-		SpacingType spac;
-		spac.Fill( 2.0 );
-
-		ImageType::Pointer i_img = km::resampleImage<ImageType>( inputImage, spac, 0 );
-		ImageType::Pointer a_img = km::resampleImage<ImageType>( atlasImage, spac, 0 );
-
-		if (true)
-		{
-			typedef itk::OnePlusOneEvolutionaryOptimizer           OptimizerType;
-			typedef itk::MattesMutualInformationImageToImageMetric< 
-				ImageType, 
-				ImageType>                                         MetricType;
-			typedef itk::ImageRegistrationMethod< 
-				ImageType, 
-				ImageType >                                        RegistrationType;
-			typedef itk::LinearInterpolateImageFunction<
-				ImageType>                                         InterpolatorType;
-			typedef itk::TranslationTransform<double, Dimension>   TransformType;
-
-			TransformType::Pointer    transform     = TransformType::New();
-			OptimizerType::Pointer    optimizer     = OptimizerType::New();
-			RegistrationType::Pointer registration  = RegistrationType::New();
-			MetricType::Pointer		  metric        = MetricType::New();
-			InterpolatorType::Pointer iterpolator   = InterpolatorType::New();
-
-			registration->SetInterpolator(  iterpolator   );
-			registration->SetOptimizer(     optimizer     );
-			registration->SetTransform(     transform     );
-			registration->SetMetric(        metric  );
-			registration->SetFixedImage(    a_img   );
-			registration->SetMovingImage(   i_img   );
-
-			ImageType::RegionType fixedRegion   = a_img->GetLargestPossibleRegion();
-			registration->SetFixedImageRegion( fixedRegion );
-			ImageType::SizeType size = fixedRegion.GetSize();
-
-			const unsigned int numberOfSamples = static_cast<unsigned int>( fixedRegion.GetNumberOfPixels() * 0.05 );
-			metric->SetNumberOfSpatialSamples( numberOfSamples );
-			metric->SetNumberOfHistogramBins( 8 );
-			metric->ReinitializeSeed( 123456 );
-
-			typedef itk::Statistics::NormalVariateGenerator  GeneratorType;
-			GeneratorType::Pointer generator = GeneratorType::New();
-			generator->Initialize(12345);
-
-			optimizer->SetNormalVariateGenerator( generator );
-			optimizer->SetInitialRadius( 3.0 );
-			optimizer->SetGrowthFactor( 3.0 );
-			optimizer->SetEpsilon( 1e-3 );
-			optimizer->SetMaximumIteration( 200 );
-
-			transform->SetIdentity();
-			registration->SetInitialTransformParameters(  transform->GetParameters()  );
-
-			OptimizerCommandIterationUpdate<OptimizerType>::Pointer optimizerObserver = 
-				OptimizerCommandIterationUpdate<OptimizerType>::New();
-			optimizer->AddObserver( itk::IterationEvent(), optimizerObserver );
-
-			try 
-			{ 
-
-				registration->Update(); 
-				std::cout<<optimizer->GetStopConditionDescription()<<std::endl;
-				std::cout<<registration->GetLastTransformParameters()<<std::endl;
-			}
-			catch( itk::ExceptionObject & err ) 
-			{ 
-				std::cout << "Exception thrown ! " << std::endl;
-				std::cout << "An error ocurred during Optimization" << std::endl;
-				std::cout << "Location    = " << err.GetLocation()    << std::endl;
-				std::cout << "Description = " << err.GetDescription() << std::endl;
-			}
-
-			finaltransform->SetTranslation( transform->GetOffset() );
-		}
-
-		if (true)
-		{
-			typedef itk::RegularStepGradientDescentOptimizer       OptimizerType;
-			typedef itk::MattesMutualInformationImageToImageMetric< 
-				ImageType, 
-				ImageType>                                         MetricType;
-			typedef itk::ImageRegistrationMethod< 
-				ImageType, 
-				ImageType >                                        RegistrationType;
-			typedef itk::LinearInterpolateImageFunction<
-				ImageType>                                         InterpolatorType;
-			typedef itk::TranslationTransform<double, Dimension>   TransformType;
-
-			//TransformType::Pointer    transform     = TransformType::New();
-			OptimizerType::Pointer    optimizer     = OptimizerType::New();
-			RegistrationType::Pointer registration  = RegistrationType::New();
-			MetricType::Pointer		  metric        = MetricType::New();
-			InterpolatorType::Pointer iterpolator   = InterpolatorType::New();
-
-			registration->SetInterpolator(  iterpolator   );
-			registration->SetOptimizer(     optimizer     );
-			registration->SetTransform(     finaltransform     );
-			registration->SetMetric(        metric  );
-			registration->SetFixedImage(    a_img   );
-			registration->SetMovingImage(   i_img   );
-
-			ImageType::RegionType fixedRegion   = a_img->GetLargestPossibleRegion();
-			registration->SetFixedImageRegion( fixedRegion );
-			ImageType::SizeType size = fixedRegion.GetSize();
-
-			const unsigned int numberOfSamples = static_cast<unsigned int>( fixedRegion.GetNumberOfPixels() * 0.05 );
-			metric->SetNumberOfSpatialSamples( numberOfSamples );
-			metric->SetNumberOfHistogramBins( 24 );
-			metric->ReinitializeSeed( 123456 );
-
-			typedef OptimizerType::ScalesType       OptimizerScalesType;
-			OptimizerScalesType optimizerScales( finaltransform->GetNumberOfParameters() );
-			optimizerScales.Fill( 1.0 );
-			optimizerScales[12]   =  0.001;
-			optimizerScales[13]   =  0.001;
-			optimizerScales[14]   =  0.001;
-
-			optimizer->SetScales( optimizerScales );
-			optimizer->SetMaximumStepLength( 1.0 );
-			optimizer->SetMinimumStepLength( 0.001 );
-			optimizer->SetRelaxationFactor( 0.6 );
-			optimizer->SetNumberOfIterations( 200 );
-			optimizer->SetGradientMagnitudeTolerance( 1e-3 );
-		}
-	}
-
 	template<class MeshType, class TransformType>
 	void
-		alignMesh( const typename MeshType* fixedMesh, 
-						const typename MeshType* movingMesh,
-						typename TransformType::Pointer & transform,
-						const std::vector<double> & _scales)
+		alignMesh(
+		const typename MeshType* fixedMesh, 
+		const typename MeshType* movingMesh,
+		typename TransformType::Pointer & transform,
+		const std::vector<double> & _scales)
 	{
 		typedef itk::PointSetToPointSetRegistrationMethod<MeshType, MeshType>           RegistrationMethodType;
-		//typedef itk::EuclideanDistanceKdTreeMultipleValuePointSetMetric<MeshType>       KdTreeMetricType;
 		typedef itk::EuclideanDistanceMultipleValuePointMetric<MeshType>                P2PMetricType;
-
 		typedef itk::LevenbergMarquardtOptimizer                                        OptimizerType;
 
 		OptimizerType::Pointer          optimizer = OptimizerType::New();
-		//KdTreeMetricType::Pointer       kdtreemetric = KdTreeMetricType::New();
 		P2PMetricType::Pointer          p2pmetric = P2PMetricType::New();
 		RegistrationMethodType::Pointer registration = RegistrationMethodType::New();
 
@@ -936,6 +443,67 @@ namespace km
 		}
 		catch ( itk::ExceptionObject& o ) 
 		{
+			std::cout << "caught exception " << o << std::endl;
+		}
+	}
+	
+	template<class DistanceMapType, class MeshType, class TransformType>
+	void
+		transformFittingToDistanceMap(
+		const typename DistanceMapType * fixedDistMap,
+		const typename MeshType * movingMesh,
+		typename TransformType::Pointer & transform,
+		unsigned int numberOfShapeParameters,
+		const std::vector<double> & _scales,
+		unsigned int maxiterations = 500)
+	{
+		TransformType::ParametersType preParam = transform->GetParameters();
+		typedef itk::PointSetToImageMultipleValueRegistrationMethod<MeshType, DistanceMapType> RegistrationMethodType;
+		typedef itk::MinValuePointSetToImageMultipleValueMetric<MeshType, DistanceMapType>     MetricType;
+		typedef itk::LevenbergMarquardtOptimizer                                  OptimizerType;
+		typedef itk::LinearInterpolateImageFunction<DistanceMapType, double>      InterpolatorType;
+		OptimizerType::Pointer          optimizer = OptimizerType::New();
+		MetricType::Pointer             metric = MetricType::New();
+		RegistrationMethodType::Pointer registration = RegistrationMethodType::New();
+		InterpolatorType::Pointer       interpolator = InterpolatorType::New();
+
+		//Metric
+		metric->SetNumberOfShapeParameters( numberOfShapeParameters );
+		metric->SetWeightForShapePenalty( km::g_shape_penalty ); //Typically we want this to stay between 0.05 and 0.3; 
+
+		//Optimizer
+		int N = transform->GetNumberOfParameters();
+		OptimizerType::ScalesType scales( N );
+		for ( int i=0;i<N;i++ )
+		{
+			scales[i] = _scales[i];
+		}
+		//std::cout<<"Optimize scale: "<<scales<<std::endl;
+		//std::cout<<maxiterations<<std::endl;
+		optimizer->SetScales( scales );
+		optimizer->SetNumberOfIterations( maxiterations );
+		optimizer->SetUseCostFunctionGradient( false );
+		optimizer->SetGradientTolerance( 1e-8 );
+		optimizer->SetValueTolerance( 1e-8 );
+		optimizer->SetEpsilonFunction( 1e-8);
+		//optimizer->AddObserver( itk::IterationEvent(), observer );
+
+		//Registration
+		registration->SetOptimizer( optimizer );
+		registration->SetInterpolator( interpolator );
+		registration->SetMetric(    metric );
+
+		registration->SetTransform( transform );
+		registration->SetInitialTransformParameters( transform->GetParameters() );
+		registration->SetFixedPointSet(  movingMesh  );
+		registration->SetMovingImage( fixedDistMap );
+
+		try {
+			std::cout << "starting model fitting" << std::endl;
+			registration->Update();
+			std::cout << optimizer->GetStopConditionDescription() << std::endl;
+
+		} catch ( itk::ExceptionObject& o ) {
 			std::cout << "caught exception " << o << std::endl;
 		}
 	}

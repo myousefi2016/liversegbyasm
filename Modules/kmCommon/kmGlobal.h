@@ -1,10 +1,18 @@
 #ifndef KM_GLOBAL_H
 #define KM_GLOBAL_H
 
+#define KM_DEBUG_ERROR(X) std::cout<<"[DEBUG ERROR]"<<(X)<<std::endl;
+#define KM_DEBUG_INFO(X) std::cout<<"[DEBUG INFO] "<<(X)<<std::endl;
+#define KM_DEBUG_PRINT(X,Y) std::cout<<"[DEBUG PRINT] "<<X<<":"<<(Y)<<std::endl;
+#define KM_DEBUG_PRINT_VALUE(X) std::cout<<"[DEBUG PRINT] "<<"X:"<<(X)<<std::endl;
+#define KM_PRINT_EXCEPTION(E) std::cout<<"[EXCEPTION] "<<(E)<<std::endl;
+#define KM_ASSERT(X) if(!(X)) std::cout<<"[ASSERT FAIL] "<<std::endl; 
+
 #include "itkVector.h"
 #include "itkPoint.h"
 #include <vector>
 #include <map>
+#include <fstream>
 
 static double SIGMA = 1.0; //采样梯度profile时，计算梯度场采样的参数sigma
 static int PROFILE_DIM = 9;
@@ -88,56 +96,47 @@ namespace km
 	static itk::Point<double> g_liverCentroid;
 	static std::map<int, double> g_varianceMap;
 	static std::map<int, double> g_fittingErrorMap;
-	
 	static double g_shape_penalty = 0.0;
 	static double g_fitting_error_threshold = 0.6;
 	static bool   g_disable_abnormal = true;
 
-	static void loadConfig(const char* filename)
+	class Config
 	{
-		std::string line;
-		std::ifstream myfile (filename);
-
-		if (myfile.is_open())
+	public:
+		static void loadConfig(const char* filename)
 		{
-			try
+			std::string line;
+			std::ifstream myfile (filename);
+
+			if (myfile.is_open())
 			{
-				while ( getline (myfile,line) )
-				{
-					if (line == "#shape_penalty")
-					{
-						getline (myfile,line);
-						g_shape_penalty = atof( line.c_str() );
+				try{
+					while ( getline (myfile,line) ){
+						if (line == "#shape_penalty"){
+							getline (myfile,line);
+							g_shape_penalty = atof( line.c_str() );
+						}else if (line == "#fitting_error_threshold"){
+							getline (myfile,line);
+							g_fitting_error_threshold = atof( line.c_str() );
+						}else if (line == "#disable_abnormal"){
+							getline (myfile,line);
+							double val = atof(line.c_str());
+							g_disable_abnormal = val>0?true:false;
+						}
 					}
-					else if (line == "#fitting_error_threshold")
-					{
-						getline (myfile,line);
-						g_fitting_error_threshold = atof( line.c_str() );
-					}
-					else if (line == "#disable_abnormal")
-					{
-						getline (myfile,line);
-						double val = atof(line.c_str());
-						g_disable_abnormal = val>0?true:false;
-					}
+					myfile.close();
+				}catch (...){
+					std::cerr<<"Exception thrown when read from configuration file"<<std::endl;
 				}
-
-				myfile.close();
+			}else{
+				std::cerr<<"Unable to open configuration file: "<<filename<<std::endl;
 			}
-			catch (...)
-			{
-				std::cerr<<"Exception thrown when read from configuration file"<<std::endl;
-			}
-		}
-		else
-		{
-			std::cerr<<"Unable to open configuration file: "<<filename<<std::endl;
-		}
 
-		std::cout<<"shape_penalty: "<<g_shape_penalty<<std::endl;
-		std::cout<<"fitting_error_threshold: "<<g_fitting_error_threshold<<std::endl;
-		std::cout<<"diable_abnormal: "<<g_disable_abnormal<<std::endl;
-	}
+			std::cout<<"shape_penalty: "<<g_shape_penalty<<std::endl;
+			std::cout<<"fitting_error_threshold: "<<g_fitting_error_threshold<<std::endl;
+			std::cout<<"diable_abnormal: "<<g_disable_abnormal<<std::endl;
+		}
+	};
 }
 
 #endif

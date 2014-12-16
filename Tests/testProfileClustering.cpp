@@ -6,9 +6,7 @@
 #include "itkMemoryProbesCollectorBase.h"
 #include "itkMesh.h"
 
-#include "kmProfileClassifier.h"
-#include "kmGlobal.h"
-#include "kmUtility.h"
+#include "kmCommon.h"
 
 using namespace km;
 using namespace std;

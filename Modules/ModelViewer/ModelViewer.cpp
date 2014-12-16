@@ -11,6 +11,9 @@
 #include "vtkInteractorStyle.h"
 #include "vtkTDxInteractorStyleCamera.h"
 #include "vtkTDxInteractorStyleSettings.h"
+#include <vtkActor.h>
+#include <vtkPolyDataMapper.h>
+#include <vtkCamera.h>
 
 #include <QMenu>
 #include "QVTKInteractor.h"
@@ -18,12 +21,7 @@
 #include <QtCore>
 #include <QString>
 
-#include <vtkActor.h>
-#include <vtkPolyDataMapper.h>
-#include <vtkCamera.h>
-
-#include "kmUtility.h"
-#include "kmVtkItkUtility.h"
+#include "kmCommon.h"
 
 
 ModelViewer::ModelViewer():

@@ -11,16 +11,10 @@
 #include "itkSimplexMesh.h"
 #include "itkCovariantVector.h"
 #include "itkDifferenceOfGaussiansGradientImageFilter.h"
-
 #include "itkTimeProbesCollectorBase.h"
 #include "itkMemoryProbesCollectorBase.h"
 
-#include "kmProfileContainer.h"
-#include "kmProfileClassifier.h"
-#include "kmProfileExtractor.h"
-#include "kmUtility.h"
-#include "kmVtkItkUtility.h"
-#include "kmProcessing.h"
+#include "kmCommon.h"
 
 #define EXTRACT_FLAG true
 

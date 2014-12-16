@@ -1,23 +1,50 @@
-#include "LiverSegmentationAPI.h"
+#include <fstream>						// file I/O
+#include <map>
+#include "itkImage.h"
+#include "itkMesh.h"
+#include "itkSimplexMesh.h"
+#include "itkTimeProbesCollectorBase.h"
+#include "itkMemoryProbesCollectorBase.h"
+#include "itkDefaultDynamicMeshTraits.h"
+#include "Representers/ITK/itkSimplexMeshRepresenter.h"
+#include "statismo_ITK/itkStatisticalModel.h"
+#include "statismo_ITK/itkStatisticalShapeModelTransform.h"
+#include "itkLinearInterpolateImageFunction.h"
+#include "itkCompositeTransform.h"
+#include "itkAffineTransform.h"
+#include "itkSimilarity3DTransform.h"
+#include "itkSimpleFilterWatcher.h"
+#include "itkRelabelComponentImageFilter.h"
+#include "itkListSample.h"
+#include "itkKdTreeGenerator.h"
+#include "itkWeightedCentroidKdTreeGenerator.h"
+#include "itkDeformableSimplexMesh3DWithShapePriorFilter.h"
 
-#include "kmProfileClassifier.h"
-#include "kmClassifierUtils.h"
-#include "kmSSMUtils.h"
-#include "kmModelFitting.h"
-#include "kmProfileExtractor.h"
-#include "kmGlobal.h"
+#include "kmCommon.h"
 #include "AdaSegmentAPI.h"
-#include "kmUtility.h"
-#include "kmVtkItkUtility.h"
-#include "kmProcessing.h"
+
+#include "LiverSegmentationAPI.h"
 
 namespace km
 {
+	const unsigned int Dimension = 3;
+	typedef itk::Image<float, Dimension> ShortImageType;
+	typedef itk::Image<unsigned char, Dimension> UCharImageType;
+	typedef itk::Image<float, Dimension> FloatImageType;
+	typedef itk::CovariantVector<double, Dimension> GradientVectorType;
+	typedef itk::Image<GradientVectorType, Dimension> GradientImageType;
+	typedef ShortImageType::SpacingType SpacingType;
+
+	typedef double MeshPixelType;
+	typedef itk::SimplexMeshRepresenter<MeshPixelType, Dimension> RepresenterType;
+	typedef itk::StatisticalModel<RepresenterType>                StatisticalModelType;
+	typedef RepresenterType::MeshType                             MeshType;
+	typedef itk::Mesh<MeshPixelType, 3> TriangleMeshType;
+
 	bool WRITE_MIDDLE_RESULT = true;
 
 	void LiverSeg( 
-		UCharImageType * segmentationResult,
-		NotifierType * notifier,
+		km::NotifierBase * notifier,
 		const char* outputdir,
 		const char* inputImageFile,
 		const char* SSMFile,
@@ -28,10 +55,6 @@ namespace km
 		const char* atlasImageFile,
 		const char* configFile)
 	{
-		if ( notifier == NULL ){
-			std::cout<<"Notifier is NULL!"<<std::endl;
-			return;
-		}
 		if ( outputdir == NULL ){
 			std::cout<<"outputdir is NULL!"<<std::endl;
 			return;
@@ -70,7 +93,7 @@ namespace km
 		}
 
 		KM_DEBUG_INFO("Load config file...");
-		km::loadConfig(configFile);
+		km::Config::loadConfig(configFile);
 
 		itk::TimeProbesCollectorBase chronometer;
 		itk::MemoryProbesCollectorBase memorymeter;
@@ -183,11 +206,8 @@ namespace km
 			if(WRITE_MIDDLE_RESULT){
 				km::writeImage<FloatImageType>( outputdir, "probabilityMap.nii.gz", probablityMap );
 			}
-
 			KM_DEBUG_INFO( "Start to locate liver centroid" );
-
 			radius.Fill(2);
-
 			liverMask = km::binaryThresholdImage<FloatImageType, UCharImageType>(probablityMap, 0.3, 1.0, 1, 0);
 			liverMask = km::binaryOpen<UCharImageType>( liverMask, radius );
 			//liverMask = km::extractMaxConnectedComponent<UCharImageType>( liverMask );
@@ -256,16 +276,6 @@ namespace km
 		loadSimplexMeshGeometryData<MeshType>(geoImage, referenceShapeMesh);
 		km::ComputeGeometry<MeshType>( deformedMesh );
 
-		km::initModelVariance<StatisticalModelType, MeshType>(model, deformedMesh, numberOfMainShapeComponents);
-		if (WRITE_MIDDLE_RESULT){
-			MeshType::Pointer varianceMesh = model->DrawMean();
-			varianceMesh->GetPointData()->Reserve( varianceMesh->GetNumberOfPoints() );
-			for (int i=0;i<varianceMesh->GetNumberOfPoints();i++){
-				varianceMesh->SetPointData(i, g_varianceMap[i]);
-			}
-			km::writeMesh<MeshType>(outputdir,"varianceMesh.vtk", varianceMesh);
-		}
-
 		typedef itk::StatisticalShapeModelTransform<RepresenterType, double, Dimension> ShapeTransformType;
 		ShapeTransformType::Pointer shapeTransform = ShapeTransformType::New();
 		shapeTransform->SetStatisticalModel( model );
@@ -293,7 +303,10 @@ namespace km
 		km::transformMesh<MeshType, RigidTransformType>( deformedMesh, deformedMesh, rigidTransform );
 
 		//Nofify locate result
-		notifier->notify( deformedMesh );
+		if (notifier!=NULL)
+		{
+			notifier->notify();
+		}
 		if (WRITE_MIDDLE_RESULT){
 			writeMesh<MeshType>(outputdir, "locatedMesh.vtk", deformedMesh);
 		}
@@ -354,7 +367,7 @@ namespace km
 			compositeTransformTmp->AddTransform( similarityTransform );
 			compositeTransformTmp->AddTransform( shapeTransform );
 
-			double ssmParamDiff = km::transformFittingToDistanceMap<FloatImageType, MeshType, CompositeTransformType>(
+			km::transformFittingToDistanceMap<FloatImageType, MeshType, CompositeTransformType>(
 				liverDistMap,
 				referenceShapeMesh,
 				compositeTransformTmp,
@@ -380,7 +393,10 @@ namespace km
 			km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, deformedMesh, compositeTransform );
 
 			//Nofify rough fitting result
-			notifier->notify( deformedMesh );
+			if (notifier!=NULL)
+			{
+				notifier->notify();
+			}
 			if (WRITE_MIDDLE_RESULT)
 			{
 				writeMesh<MeshType>(outputdir, "initializedMesh.vtk", deformedMesh);
@@ -424,78 +440,108 @@ namespace km
 			g_phase = DEFORMATION_BY_LIVER_PROFILE;
 			shapeTransform->SetUsedNumberOfCoefficients( numberOfMainProfileComponents );
 
-			MeshType::Pointer compositeFittedMesh = km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, compositeTransform );
-			km::loadSimplexMeshGeometryData<MeshType>(geoImage, compositeFittedMesh);
-			km::ComputeGeometry<MeshType>(compositeFittedMesh, true);
+			typedef itk::DeformableSimplexMesh3DWithShapePriorFilter<MeshType,
+																	 MeshType,
+																	 ShortImageType,
+																	 StatisticalModelType,
+																	 RigidTransformType,
+																	 ShapeTransformType> DeformableFilterType;
+			DeformableFilterType::Pointer deformaFilter = DeformableFilterType::New();
+			deformaFilter->SetAlpha(0.3);
+			deformaFilter->SetKappa(0.1);
+			deformaFilter->SetIterations(500);
+			deformaFilter->SetInput(deformedMesh);
+			deformaFilter->SetInputImage(inputImage);
+			deformaFilter->SetStatisticalModel(model);
+			deformaFilter->SetRigidTransform(rigidTransform);
+			deformaFilter->SetShapeTransform(shapeTransform);
+			deformaFilter->SetBoundaryClassifier(&ProfileClassifier_Boundary);
+			deformaFilter->SetLiverClassifier(&ProfileClassifier_Liver);
+			deformaFilter->Update();
 
-			typedef itk::IdentityTransform<double, Dimension> IdentityTransformType;
-			IdentityTransformType::Pointer identityTransform = IdentityTransformType::New();
-			MeshType::Pointer bestMesh = km::transformMesh<MeshType, IdentityTransformType>( deformedMesh, identityTransform );
-			km::loadSimplexMeshGeometryData<MeshType>(geoImage, bestMesh);
-			km::assigneMesh<MeshType>(bestMesh, 0.0);
-
-			typedef km::ProfileExtractor<ShortImageType> ProfileExtractorType;
-			ProfileExtractorType profileExtractor;
-			profileExtractor.setImage(inputImage);
-			profileExtractor.enableCache(false);
-
-			typedef km::ClassifierUtils<MeshType, ProfileExtractorType> ClassifierUtilsType;
-			ClassifierUtilsType classifierUtils;
-			classifierUtils.SetBoundaryClassifier(&ProfileClassifier_Boundary);
-			classifierUtils.SetRegionClassifier(&ProfileClassifier_Liver);
-			classifierUtils.SetProfileExtractor(&profileExtractor);
-
-			typedef km::SSMUtils<MeshType, StatisticalModelType, RigidTransformType, ShapeTransformType> SSMUtilsType;
-			SSMUtilsType ssmUtils;
-			ssmUtils.SetSSM(model);
-			ssmUtils.SetRigidTransform(rigidTransform);
-			ssmUtils.SetShapeTransform(shapeTransform);
-
-			unsigned int maxIterations = 20;
-			double rigidParaDiffTollerance = 0.002;
-			double shapeParaDiffTollerance = 0.03;
-			unsigned int iter_ellapsed = 0;
-			bool flagLooping = true;
-
-			MeshType::Pointer unfittedMesh = MeshType::New();
-			while ( flagLooping )
+			if (notifier!=NULL)
 			{
-				std::cout<<"********************************iteration: "<<iter_ellapsed<<"************************************"<<std::endl;
-				g_liverCentroid.CastFrom(km::getMeshCentroid<MeshType>(compositeFittedMesh));
-				rigidTransform->SetCenter( g_liverCentroid );
-
-				classifierUtils.deformByLiverClassification(bestMesh, compositeFittedMesh, 1.5, 20);
-
-				km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, unfittedMesh, compositeTransform );
-
-				KM_DEBUG_PRINT("Composite transform fitting...", iter_ellapsed);
-				ssmUtils.compositeTransformFitting(bestMesh);
-				
-				km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, compositeFittedMesh, compositeTransform );
-				km::ComputeGeometry<MeshType>( compositeFittedMesh, true );
-
-				classifierUtils.updateShapeNormals(unfittedMesh, compositeFittedMesh);
-
-				//Calculate shape parameters variance.
-				double shapeParamDiff = ssmUtils.calShapeParaDiff();
-
-				KM_DEBUG_PRINT("SSM parameters difference", shapeParamDiff);
-				if (shapeParamDiff < shapeParaDiffTollerance && iter_ellapsed > 0){
-					KM_DEBUG_INFO( "SSM parameters difference is smaller than tollerance. Stop fitting now.." );
-					flagLooping = false;
-				}else if (iter_ellapsed >= maxIterations){
-					KM_DEBUG_INFO( "Exceed maximum iteration number. Stop fitting now.." );
-					flagLooping = false;
-				}
-
-				notifier->notify( compositeFittedMesh );
-				notifier->notify( bestMesh );
-				if (WRITE_MIDDLE_RESULT){
-					km::writeMesh<MeshType>(outputdir, "bestMesh", iter_ellapsed, ".vtk", bestMesh);
-					km::writeMesh<MeshType>(outputdir, "compositeFittedMesh", iter_ellapsed, ".vtk", compositeFittedMesh);
-				}
-				iter_ellapsed++;
+				notifier->notify();
 			}
+			if (WRITE_MIDDLE_RESULT){
+				km::writeMesh<MeshType>(outputdir, "deformed_500.vtk", deformedMesh);
+			}
+
+			//MeshType::Pointer compositeFittedMesh = km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, compositeTransform );
+			//km::loadSimplexMeshGeometryData<MeshType>(geoImage, compositeFittedMesh);
+			//km::ComputeGeometry<MeshType>(compositeFittedMesh, true);
+
+			//typedef itk::IdentityTransform<double, Dimension> IdentityTransformType;
+			//IdentityTransformType::Pointer identityTransform = IdentityTransformType::New();
+			//MeshType::Pointer bestMesh = km::transformMesh<MeshType, IdentityTransformType>( deformedMesh, identityTransform );
+			//km::loadSimplexMeshGeometryData<MeshType>(geoImage, bestMesh);
+			//km::assigneMesh<MeshType>(bestMesh, 0.0);
+
+			//typedef km::ProfileExtractor<ShortImageType> ProfileExtractorType;
+			//ProfileExtractorType profileExtractor;
+			//profileExtractor.setImage(inputImage);
+			//profileExtractor.enableCache(false);
+
+			//typedef km::ClassifierUtils<MeshType, ProfileExtractorType> ClassifierUtilsType;
+			//ClassifierUtilsType classifierUtils;
+			//classifierUtils.SetBoundaryClassifier(&ProfileClassifier_Boundary);
+			//classifierUtils.SetRegionClassifier(&ProfileClassifier_Liver);
+			//classifierUtils.SetProfileExtractor(&profileExtractor);
+
+			//typedef km::SSMUtils<MeshType, StatisticalModelType, RigidTransformType, ShapeTransformType> SSMUtilsType;
+			//SSMUtilsType ssmUtils;
+			//ssmUtils.SetSSM(model);
+			//ssmUtils.SetRigidTransform(rigidTransform);
+			//ssmUtils.SetShapeTransform(shapeTransform);
+
+		//	unsigned int maxIterations = 20;
+		//	double rigidParaDiffTollerance = 0.002;
+		//	double shapeParaDiffTollerance = 0.03;
+		//	unsigned int iter_ellapsed = 0;
+		//	bool flagLooping = true;
+
+		//	MeshType::Pointer unfittedMesh = MeshType::New();
+		//	while ( flagLooping )
+		//	{
+		//		std::cout<<"------------------iteration: "<<iter_ellapsed<<"----------------"<<std::endl;
+		//		g_liverCentroid.CastFrom(km::getMeshCentroid<MeshType>(compositeFittedMesh));
+		//		rigidTransform->SetCenter( g_liverCentroid );
+
+		//		classifierUtils.deformByLiverClassification(bestMesh, compositeFittedMesh, 1.5, 20);
+
+		//		km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, unfittedMesh, compositeTransform );
+
+		//		KM_DEBUG_PRINT("Composite transform fitting...", iter_ellapsed);
+		//		ssmUtils.compositeTransformFitting(bestMesh);
+		//		
+		//		km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, compositeFittedMesh, compositeTransform );
+		//		km::ComputeGeometry<MeshType>( compositeFittedMesh, true );
+
+		//		classifierUtils.updateShapeNormals(unfittedMesh, compositeFittedMesh);
+
+		//		//Calculate shape parameters variance.
+		//		double shapeParamDiff = ssmUtils.calShapeParaDiff();
+
+		//		KM_DEBUG_PRINT("SSM parameters difference", shapeParamDiff);
+		//		if (shapeParamDiff < shapeParaDiffTollerance && iter_ellapsed > 0){
+		//			KM_DEBUG_INFO( "SSM parameters difference is smaller than tollerance. Stop fitting now.." );
+		//			flagLooping = false;
+		//		}else if (iter_ellapsed >= maxIterations){
+		//			KM_DEBUG_INFO( "Exceed maximum iteration number. Stop fitting now.." );
+		//			flagLooping = false;
+		//		}
+
+		//		if (notifier!=NULL)
+		//		{
+		//			notifier->notify();
+		//		}
+		//		notifier->notify( bestMesh );
+		//		if (WRITE_MIDDLE_RESULT){
+		//			km::writeMesh<MeshType>(outputdir, "bestMesh", iter_ellapsed, ".vtk", bestMesh);
+		//			km::writeMesh<MeshType>(outputdir, "compositeFittedMesh", iter_ellapsed, ".vtk", compositeFittedMesh);
+		//		}
+		//		iter_ellapsed++;
+		//	}
 		}
 
 		//if(flag_deformingBoundaryProfile)

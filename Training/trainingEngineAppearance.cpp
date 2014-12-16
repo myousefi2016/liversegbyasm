@@ -27,21 +27,6 @@ int main(int argc, char* argv[])
 	const char* meshlistfile  = argv[2];
 	const char* referencegeometry = argv[3];
 	const char* outputdir = argv[4];
-	//const char* categorystr = argv[5];
-
-	//PROFILE_CATEGORY category;
-	//if (strcmp(categorystr,"BOUNDARY")==0)
-	//{
-	//	category = BOUNDARY;
-	//}
-	//else if (strcmp(categorystr,"INSIDE")==0)
-	//{
-	//	category = INSIDE;
-	//}
-	//else
-	//{
-	//	category = DEFAULT;
-	//}
 
 	itk::TimeProbesCollectorBase chronometer;
 	itk::MemoryProbesCollectorBase memorymeter;

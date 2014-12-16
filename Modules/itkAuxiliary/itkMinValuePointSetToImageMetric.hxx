@@ -20,7 +20,7 @@
 
 #include "itkMinValuePointSetToImageMetric.h"
 #include "itkImageRegionConstIteratorWithIndex.h"
-#include "kmMath.h"
+#include "kmUtility.h"
 
 namespace itk
 {

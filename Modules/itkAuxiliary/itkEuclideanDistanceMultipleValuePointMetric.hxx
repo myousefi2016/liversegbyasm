@@ -20,7 +20,7 @@
 
 #include "itkEuclideanDistanceMultipleValuePointMetric.h"
 #include "itkImageRegionConstIteratorWithIndex.h"
-#include "kmMath.h"
+#include "kmUtility.h"
 
 namespace itk
 {
@@ -133,7 +133,7 @@ EuclideanDistanceMultipleValuePointMetric< TFixedPointSet, TMovingPointSet >
 			}
 		}
 		//1e-6 is make sure the log take positive input.
-		shapePenalty =  -10.0*log( km::cdf_outside(maxParam) + 1e-10 );
+		shapePenalty =  -10.0*log( km::Math::cdf_outside(maxParam) + 1e-10 );
 	}
 
 	unsigned int identifier = 0;

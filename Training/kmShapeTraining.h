@@ -6,26 +6,15 @@
 #include  <direct.h> 
 
 #include "itkImage.h"
-#include "itkEuler3DTransform.h"
-
-#include <itkScaleVersor3DTransform.h>
-#include "itkSimilarity3DTransform.h"
-#include "itkEuler3DTransform.h"
 #include "itkBSplineTransform.h"
-
 #include "itkDefaultDynamicMeshTraits.h"
 #include "itkMesh.h"
 #include "itkSimplexMesh.h"
 #include "vtkSmartPointer.h"
 #include "vtkPolyData.h"
+#include "itkDeformableSimplexMesh3DICPForceFilter.h"
 
-#include "kmUtility.h"
-#include "kmProcessing.h"
-#include "kmRegistration.h"
-#include "kmVtkItkUtility.h"
-#include "kmSegmentation.h"
-
-using namespace km;
+#include "kmCommon.h"
 
 namespace km
 {
@@ -211,12 +200,16 @@ namespace km
 			km::writeMesh<SimplexMeshType>( outputdir, "accurateMesh", i, ".vtk", accurateMesh );
 
 			KM_DEBUG_INFO( "Deformation fitting..." );
-			km::deformSegSimplexMeshByICP<SimplexMeshType>(
-				accurateMesh, 
-				liverMesh);
-
-			//Smooth and automatic adaption.
-			km::adaptMesh<SimplexMeshType>( liverMesh, 0.05, 50 );
+			typedef itk::DeformableSimplexMesh3DICPForceFilter<SimplexMeshType,SimplexMeshType> DeformFilterType;
+			DeformFilterType::Pointer deformFilter = DeformFilterType::New();
+			deformFilter->SetInput( liverMesh );
+			deformFilter->SetTargetMesh( accurateMesh );
+			deformFilter->SetAlpha( 0.1 );
+			deformFilter->SetGamma( 0.05 );
+			deformFilter->SetKappa( 1.0 );
+			deformFilter->SetIterations( 300 );
+			deformFilter->SetRigidity( 2 );
+			deformFilter->Update();
 
 			km::writeMesh<SimplexMeshType>( outputdir, "livermesh", i, ".vtk", liverMesh );
 

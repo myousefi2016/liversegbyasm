@@ -3,11 +3,10 @@
 
 namespace km
 {
-	template<class TPointSet>
 	class NotifierBase
 	{
 	public:
-		virtual void notify( const TPointSet * pointset )
+		virtual void notify( )
 		{
 		}
 	};

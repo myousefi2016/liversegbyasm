@@ -6,7 +6,7 @@
 #include "Representers/ITK/itkSimplexMeshRepresenter.h"
 #include "statismo_ITK/itkStatisticalModel.h"
 
-#include "kmUtility.h"
+#include "kmCommon.h"
 
 int main(int argc, char* argv[])
 {

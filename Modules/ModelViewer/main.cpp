@@ -2,8 +2,6 @@
 #include "QVTKApplication.h"
 #include "ModelViewer.h"
 
-
-
 using namespace statismo;
 
 
