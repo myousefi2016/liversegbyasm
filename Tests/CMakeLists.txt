@@ -25,3 +25,6 @@ target_link_libraries (testProfileContainer ${ITK_LIBRARIES} ${VTK_LIBRARIES} ${
 
 add_executable (testDeformableSimplexMesh3DWithShapePriorFilter testDeformableSimplexMesh3DWithShapePriorFilter.cpp)
 target_link_libraries (testDeformableSimplexMesh3DWithShapePriorFilter ${ITK_LIBRARIES} ${VTK_LIBRARIES} ${KM_LIBRARIES})
+
+add_executable (testACVD testACVD.cpp)
+target_link_libraries (testACVD ${ITK_LIBRARIES} ${VTK_LIBRARIES} ${KM_LIBRARIES})

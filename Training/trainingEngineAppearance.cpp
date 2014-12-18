@@ -19,7 +19,7 @@ int main(int argc, char* argv[])
 {
 	if( argc < 5 )
 	{
-		std::cerr<<"Usage:   origDataList meshList referenceGeometry OutputDir [Profile Type: INSIDE/BOUNDARY]"<<std::endl;
+		std::cerr<<"Usage:   origDataList meshList referenceGeometry OutputDir"<<std::endl;
 		return EXIT_FAILURE;
 	}
 
@@ -38,8 +38,7 @@ int main(int argc, char* argv[])
 		origlistfile 
 		,meshlistfile
 		,referencegeometry
-		,outputdir
-		/*,category*/);
+		,outputdir);
 
 	if(resultcode==EXIT_SUCCESS)
 	{
@@ -54,6 +53,8 @@ int main(int argc, char* argv[])
 	memorymeter.Stop( "appearancetraining" );
 	chronometer.Report( std::cout );
 	memorymeter.Report( std::cout );
+
+	system("pause");
 
 	return resultcode;
 }

@@ -113,7 +113,7 @@ namespace km
 			}
 
 			//Remove noise point.
-			km::smoothMeshData<MeshType>(outputMesh, 0);
+			//km::smoothMeshData<MeshType>(outputMesh, 0);
 
 			geoIt = liverMesh->GetGeometryData()->Begin();
 			geoItEnd = liverMesh->GetGeometryData()->End();

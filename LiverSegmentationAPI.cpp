@@ -159,9 +159,6 @@ namespace km
 			km::writeImage<ShortImageType>( outputdir, "inputImageSmoothed.nii.gz", inputImage );
 		}
 
-		KM_DEBUG_INFO("Calculate gradient image..");
-		GradientImageType::Pointer gradImage = km::calculateRecursiveGradientImage<ShortImageType, GradientImageType>( inputImage, SIGMA );
-
 		KM_DEBUG_INFO("Calculate minimum & maximum grey value..");
 		km::calculateMinAndMax<ShortImageType>( inputImage, minval, maxval );
 		KM_DEBUG_PRINT( "Min value", minval );
@@ -448,8 +445,9 @@ namespace km
 																	 ShapeTransformType> DeformableFilterType;
 			DeformableFilterType::Pointer deformaFilter = DeformableFilterType::New();
 			deformaFilter->SetAlpha(0.3);
-			deformaFilter->SetKappa(0.1);
-			deformaFilter->SetIterations(500);
+			deformaFilter->SetKappa(0.2);
+			deformaFilter->SetGamma(0.1);
+			deformaFilter->SetIterations(100);
 			deformaFilter->SetInput(deformedMesh);
 			deformaFilter->SetInputImage(inputImage);
 			deformaFilter->SetStatisticalModel(model);
@@ -464,84 +462,85 @@ namespace km
 				notifier->notify();
 			}
 			if (WRITE_MIDDLE_RESULT){
-				km::writeMesh<MeshType>(outputdir, "deformed_500.vtk", deformedMesh);
+				km::writeMesh<MeshType>(outputdir, "deformed_200.vtk", deformedMesh);
 			}
 
-			//MeshType::Pointer compositeFittedMesh = km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, compositeTransform );
-			//km::loadSimplexMeshGeometryData<MeshType>(geoImage, compositeFittedMesh);
-			//km::ComputeGeometry<MeshType>(compositeFittedMesh, true);
+			/*
+			MeshType::Pointer compositeFittedMesh = km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, compositeTransform );
+			km::loadSimplexMeshGeometryData<MeshType>(geoImage, compositeFittedMesh);
+			km::ComputeGeometry<MeshType>(compositeFittedMesh, true);
 
-			//typedef itk::IdentityTransform<double, Dimension> IdentityTransformType;
-			//IdentityTransformType::Pointer identityTransform = IdentityTransformType::New();
-			//MeshType::Pointer bestMesh = km::transformMesh<MeshType, IdentityTransformType>( deformedMesh, identityTransform );
-			//km::loadSimplexMeshGeometryData<MeshType>(geoImage, bestMesh);
-			//km::assigneMesh<MeshType>(bestMesh, 0.0);
+			MeshType::Pointer bestMesh = km::cloneMesh<MeshType, MeshType>( deformedMesh );
+			km::loadSimplexMeshGeometryData<MeshType>(geoImage, bestMesh);
+			km::assigneMesh<MeshType>(bestMesh, 0.0);
 
-			//typedef km::ProfileExtractor<ShortImageType> ProfileExtractorType;
-			//ProfileExtractorType profileExtractor;
-			//profileExtractor.setImage(inputImage);
-			//profileExtractor.enableCache(false);
+			km::writeImage<ShortImageType>(outputdir, "ThisIsTheInputImage.nii.gz", inputImage);
 
-			//typedef km::ClassifierUtils<MeshType, ProfileExtractorType> ClassifierUtilsType;
-			//ClassifierUtilsType classifierUtils;
-			//classifierUtils.SetBoundaryClassifier(&ProfileClassifier_Boundary);
-			//classifierUtils.SetRegionClassifier(&ProfileClassifier_Liver);
-			//classifierUtils.SetProfileExtractor(&profileExtractor);
+			typedef km::ProfileExtractor<ShortImageType> ProfileExtractorType;
+			ProfileExtractorType profileExtractor;
+			profileExtractor.setImage(inputImage);
+			profileExtractor.enableCache(false);
 
-			//typedef km::SSMUtils<MeshType, StatisticalModelType, RigidTransformType, ShapeTransformType> SSMUtilsType;
-			//SSMUtilsType ssmUtils;
-			//ssmUtils.SetSSM(model);
-			//ssmUtils.SetRigidTransform(rigidTransform);
-			//ssmUtils.SetShapeTransform(shapeTransform);
+			typedef km::ClassifierUtils<MeshType, ProfileExtractorType> ClassifierUtilsType;
+			ClassifierUtilsType classifierUtils;
+			classifierUtils.SetBoundaryClassifier(&ProfileClassifier_Boundary);
+			classifierUtils.SetRegionClassifier(&ProfileClassifier_Liver);
+			classifierUtils.SetProfileExtractor(&profileExtractor);
 
-		//	unsigned int maxIterations = 20;
-		//	double rigidParaDiffTollerance = 0.002;
-		//	double shapeParaDiffTollerance = 0.03;
-		//	unsigned int iter_ellapsed = 0;
-		//	bool flagLooping = true;
+			typedef km::SSMUtils<MeshType, StatisticalModelType, RigidTransformType, ShapeTransformType> SSMUtilsType;
+			SSMUtilsType ssmUtils;
+			ssmUtils.SetSSM(model);
+			ssmUtils.SetRigidTransform(rigidTransform);
+			ssmUtils.SetShapeTransform(shapeTransform);
 
-		//	MeshType::Pointer unfittedMesh = MeshType::New();
-		//	while ( flagLooping )
-		//	{
-		//		std::cout<<"------------------iteration: "<<iter_ellapsed<<"----------------"<<std::endl;
-		//		g_liverCentroid.CastFrom(km::getMeshCentroid<MeshType>(compositeFittedMesh));
-		//		rigidTransform->SetCenter( g_liverCentroid );
+			unsigned int maxIterations = 20;
+			double rigidParaDiffTollerance = 0.002;
+			double shapeParaDiffTollerance = 0.03;
+			unsigned int iter_ellapsed = 0;
+			bool flagLooping = true;
 
-		//		classifierUtils.deformByLiverClassification(bestMesh, compositeFittedMesh, 1.5, 20);
+			MeshType::Pointer unfittedMesh = MeshType::New();
+			while ( flagLooping )
+			{
+				std::cout<<"------------------iteration: "<<iter_ellapsed<<"----------------"<<std::endl;
+				g_liverCentroid.CastFrom(km::getMeshCentroid<MeshType>(compositeFittedMesh));
+				rigidTransform->SetCenter( g_liverCentroid );
 
-		//		km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, unfittedMesh, compositeTransform );
+				classifierUtils.deformByLiverClassification(bestMesh, compositeFittedMesh, 1.5, 20);
 
-		//		KM_DEBUG_PRINT("Composite transform fitting...", iter_ellapsed);
-		//		ssmUtils.compositeTransformFitting(bestMesh);
-		//		
-		//		km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, compositeFittedMesh, compositeTransform );
-		//		km::ComputeGeometry<MeshType>( compositeFittedMesh, true );
+				km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, unfittedMesh, compositeTransform );
 
-		//		classifierUtils.updateShapeNormals(unfittedMesh, compositeFittedMesh);
+				KM_DEBUG_PRINT("Composite transform fitting...", iter_ellapsed);
+				ssmUtils.compositeTransformFitting(bestMesh);
+				
+				km::transformMesh<MeshType, CompositeTransformType>( referenceShapeMesh, compositeFittedMesh, compositeTransform );
+				km::ComputeGeometry<MeshType>( compositeFittedMesh, true );
 
-		//		//Calculate shape parameters variance.
-		//		double shapeParamDiff = ssmUtils.calShapeParaDiff();
+				classifierUtils.updateShapeNormals(unfittedMesh, compositeFittedMesh);
 
-		//		KM_DEBUG_PRINT("SSM parameters difference", shapeParamDiff);
-		//		if (shapeParamDiff < shapeParaDiffTollerance && iter_ellapsed > 0){
-		//			KM_DEBUG_INFO( "SSM parameters difference is smaller than tollerance. Stop fitting now.." );
-		//			flagLooping = false;
-		//		}else if (iter_ellapsed >= maxIterations){
-		//			KM_DEBUG_INFO( "Exceed maximum iteration number. Stop fitting now.." );
-		//			flagLooping = false;
-		//		}
+				//Calculate shape parameters variance.
+				double shapeParamDiff = ssmUtils.calShapeParaDiff();
 
-		//		if (notifier!=NULL)
-		//		{
-		//			notifier->notify();
-		//		}
-		//		notifier->notify( bestMesh );
-		//		if (WRITE_MIDDLE_RESULT){
-		//			km::writeMesh<MeshType>(outputdir, "bestMesh", iter_ellapsed, ".vtk", bestMesh);
-		//			km::writeMesh<MeshType>(outputdir, "compositeFittedMesh", iter_ellapsed, ".vtk", compositeFittedMesh);
-		//		}
-		//		iter_ellapsed++;
-		//	}
+				KM_DEBUG_PRINT("SSM parameters difference", shapeParamDiff);
+				if (shapeParamDiff < shapeParaDiffTollerance && iter_ellapsed > 0){
+					KM_DEBUG_INFO( "SSM parameters difference is smaller than tollerance. Stop fitting now.." );
+					flagLooping = false;
+				}else if (iter_ellapsed >= maxIterations){
+					KM_DEBUG_INFO( "Exceed maximum iteration number. Stop fitting now.." );
+					flagLooping = false;
+				}
+
+				if (notifier!=NULL)
+				{
+					notifier->notify();
+				}
+				if (WRITE_MIDDLE_RESULT){
+					km::writeMesh<MeshType>(outputdir, "bestMesh", iter_ellapsed, ".vtk", bestMesh);
+					km::writeMesh<MeshType>(outputdir, "compositeFittedMesh", iter_ellapsed, ".vtk", compositeFittedMesh);
+				}
+				iter_ellapsed++;
+			}
+			*/
 		}
 
 		//if(flag_deformingBoundaryProfile)

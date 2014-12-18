@@ -1723,43 +1723,39 @@ namespace km
 	//-------------------------------------------------------//
 	typedef itk::CovariantVector<unsigned int, 3> GeometryVectorType;
 	typedef itk::Image<GeometryVectorType, 1>     GeometryImageType;
-	template<class MeshType>
+
+	template< typename TInputMesh, typename TOutputMesh >
 	void
-		copySimplexMesh(
-		const typename MeshType* meshFrom, 
-		typename MeshType::Pointer & meshTo, 
-		bool copyGeoFlag = true, 
-		bool copyPointsFlag = false,
-		bool copyCellFlag = false,
-		bool computeGeometry = false)
+		copyMeshToMeshGeometry(const typename TInputMesh *inputMesh, typename TOutputMesh *outputMesh)
 	{
-		const unsigned int numberOfPoints = meshFrom->GetNumberOfPoints();
-		if (copyGeoFlag){
-			typedef typename MeshType::GeometryMapType           GeometryMapType;
-			typedef typename MeshType::GeometryMapPointer        GeometryMapPointer;
-			typedef typename MeshType::GeometryMapConstIterator  GeometryMapConstIterator;
-			GeometryMapPointer inputGeometryData = meshFrom->GetGeometryData();
-			GeometryMapPointer outputGeometryData = meshTo->GetGeometryData();
-			outputGeometryData->Reserve( numberOfPoints );
-			GeometryMapConstIterator inputGeometryItr = inputGeometryData->Begin();
-			for( unsigned int pointId = 0; pointId < numberOfPoints; pointId++ ){
+		const unsigned int numberOfPoints = inputMesh->GetNumberOfPoints();
+		typedef typename TInputMesh::GeometryMapType  InputGeometryMapType;
+		typedef typename TOutputMesh::GeometryMapType OutputGeometryMapType;
+		OutputGeometryMapType * outputGeometryData = outputMesh->GetGeometryData();
+		const InputGeometryMapType * inputGeometryData = inputMesh->GetGeometryData();
+		if (inputGeometryData)
+		{
+			if (outputGeometryData == NULL){
+				outputGeometryData = OutputGeometryMapType::New();
+			}
+			outputGeometryData->Reserve( inputGeometryData->Size() );
+			InputGeometryMapType::ConstIterator inputGeometryItr = inputGeometryData->Begin();
+			InputGeometryMapType::ConstIterator inputGeometryEnd = inputGeometryData->End();
+			OutputGeometryMapType::Iterator outputGeometryItr = outputGeometryData->Begin();
+			while( inputGeometryItr!=inputGeometryEnd ){
 				SimplexMeshGeometry * outputGeometryDataItem = new SimplexMeshGeometry;
 				SimplexMeshGeometry * inputGeometryDataItem = inputGeometryItr.Value();
 				outputGeometryDataItem->CopyFrom( *inputGeometryDataItem );
-				outputGeometryData->InsertElement( pointId, outputGeometryDataItem );
+				outputGeometryItr.Value() = outputGeometryDataItem;
 				++inputGeometryItr;
+				++outputGeometryItr;
 			}
-		}
-		meshTo->SetLastCellId( meshFrom->GetLastCellId() );
-		meshTo->BuildCellLinks();
-		if(computeGeometry){
-			ComputeGeometry<MeshType>( meshTo );
 		}
 	}
 
 	template< typename TInputMesh, typename TOutputMesh >
 	void
-		CopyInputMeshToOutputMeshPoints(const typename TInputMesh *inputMesh, typename TOutputMesh *outputMesh)
+		copyMeshToMeshPoints(const typename TInputMesh *inputMesh, typename TOutputMesh *outputMesh)
 	{
 		typedef typename TOutputMesh::PointsContainer OutputPointsContainer;
 		typedef typename TInputMesh::PointsContainer  InputPointsContainer;
@@ -1781,7 +1777,7 @@ namespace km
 
 	template< typename TInputMesh, typename TOutputMesh >
 	void
-		CopyInputMeshToOutputMeshCells(const typename TInputMesh *inputMesh, typename TOutputMesh *outputMesh)
+		copyMeshToMeshCells(const typename TInputMesh *inputMesh, typename TOutputMesh *outputMesh)
 	{
 		typedef typename TOutputMesh::CellsContainer  OutputCellsContainer;
 		typedef typename TInputMesh::CellsContainer   InputCellsContainer;
@@ -1807,7 +1803,7 @@ namespace km
 
 	template< typename TInputMesh, typename TOutputMesh >
 	void
-		CopyInputMeshToOutputMeshCellLinks(const typename TInputMesh *inputMesh, typename TOutputMesh *outputMesh)
+		copyMeshToMeshCellLinks(const typename TInputMesh *inputMesh, typename TOutputMesh *outputMesh)
 	{
 		typedef typename TOutputMesh::CellLinksContainer OutputCellLinksContainer;
 		typedef typename TInputMesh::CellLinksContainer  InputCellLinksContainer;
@@ -1824,6 +1820,29 @@ namespace km
 				++outputItr;
 			}
 			outputMesh->SetCellLinks(outputCellLinks);
+		}
+	}
+
+	template<typename InputMeshType, typename OutputMeshType>
+	void
+		copyMeshToMeshPointData( typename InputMeshType* inputMesh, typename OutputMeshType* outputMesh )
+	{
+		unsigned int numberOfPointsInSource = inputMesh->GetNumberOfPoints();
+		unsigned int numberOfPointsInTarget = outputMesh->GetNumberOfPoints();
+		if (numberOfPointsInTarget!=numberOfPointsInSource){
+			std::cerr<<"Number of points is different between source mesh and target mesh !"<<std::endl;
+			return;
+		}
+		typedef typename InputMeshType::PointDataContainerPointer         InputPointDataContainerPointer;
+		typedef typename InputMeshType::PointDataContainer::ConstIterator InputPointDataContainerConstIterator;
+		typedef typename OutputMeshType::PointDataContainerPointer OutputPointDataContainerPointer;
+		InputPointDataContainerPointer allInputPointData = inputMesh->GetPointData();
+		InputPointDataContainerConstIterator inputPointDataIt = allInputPointData->Begin();
+		InputPointDataContainerConstIterator inputPointDataItEnd = allInputPointData->End();
+		OutputPointDataContainerPointer allOutputPointData = outputMesh->GetPointData();
+		while( inputPointDataIt != inputPointDataItEnd ){
+			allOutputPointData->InsertElement( inputPointDataIt.Index(), inputPointDataIt.Value() );
+			inputPointDataIt++;
 		}
 	}
 
@@ -1886,7 +1905,7 @@ namespace km
 
 	template<class MeshType>
 	void
-		writeSimplexMeshGeometryData(const char* filename, typename MeshType::Pointer mesh)
+		writeSimplexMeshGeometryData(const char* filename, const typename MeshType* mesh)
 	{		
 		GeometryImageType::Pointer geoImage = km::generateGeoImage<MeshType>( mesh );		
 		km::writeImage<GeometryImageType>( filename, geoImage );
@@ -1894,7 +1913,7 @@ namespace km
 
 	template<class MeshType>
 	void
-		readSimplexMeshGeometryData(const char* filename, typename MeshType::Pointer mesh)
+		readSimplexMeshGeometryData(const char* filename, typename MeshType* mesh)
 	{
 		unsigned int numberOfPoints = mesh->GetNumberOfPoints();
 		mesh->GetGeometryData()->Reserve( numberOfPoints );
@@ -1921,7 +1940,7 @@ namespace km
 
 	template<class MeshType>
 	void
-		loadSimplexMeshGeometryData(const GeometryImageType* geoImage, typename MeshType::Pointer mesh)
+		loadSimplexMeshGeometryData(const GeometryImageType* geoImage, typename MeshType* mesh)
 	{
 		unsigned int numberOfPoints = mesh->GetNumberOfPoints();
 		mesh->GetGeometryData()->Reserve( numberOfPoints );
@@ -1945,58 +1964,9 @@ namespace km
 		ComputeGeometry<MeshType>( mesh );
 	}
 
-	template<typename InputMeshType, typename OutputMeshType>
-	void
-		copyPointDataFromMeshToMesh( typename InputMeshType* inputMesh, typename OutputMeshType* outputMesh )
-	{
-		unsigned int numberOfPointsInSource = inputMesh->GetNumberOfPoints();
-		unsigned int numberOfPointsInTarget = outputMesh->GetNumberOfPoints();
-		if (numberOfPointsInTarget!=numberOfPointsInSource){
-			std::cerr<<"Number of points is different between source mesh and target mesh !"<<std::endl;
-			return;
-		}
-		typedef typename InputMeshType::PointDataContainerPointer         InputPointDataContainerPointer;
-		typedef typename InputMeshType::PointDataContainer::ConstIterator InputPointDataContainerConstIterator;
-		typedef typename OutputMeshType::PointDataContainerPointer OutputPointDataContainerPointer;
-		InputPointDataContainerPointer allInputPointData = inputMesh->GetPointData();
-		InputPointDataContainerConstIterator inputPointDataIt = allInputPointData->Begin();
-		InputPointDataContainerConstIterator inputPointDataItEnd = allInputPointData->End();
-		OutputPointDataContainerPointer allOutputPointData = outputMesh->GetPointData();
-		while( inputPointDataIt != inputPointDataItEnd ){
-			allOutputPointData->InsertElement( inputPointDataIt.Index(), inputPointDataIt.Value() );
-			inputPointDataIt++;
-		}
-	}
-
-	template<typename InputMeshType, typename OutputMeshType>
-	void
-		copyPointsFromMeshToMesh( typename InputMeshType* inputMesh, typename OutputMeshType* outputMesh )
-	{
-		unsigned int numberOfPointsInSource = inputMesh->GetNumberOfPoints();
-		unsigned int numberOfPointsInTarget = outputMesh->GetNumberOfPoints();
-		if (numberOfPointsInTarget!=numberOfPointsInSource)
-		{
-			std::cerr<<"Number of points is different between source mesh and target mesh !"<<std::endl;
-			return;
-		}
-		typedef typename InputMeshType::PointsContainerPointer         InputPointsContainerPointer;
-		typedef typename InputMeshType::PointsContainer::ConstIterator InputPointsContainerConstIterator;
-		typedef typename OutputMeshType::PointsContainerPointer         OutputPointsContainerPointer;
-		typedef typename OutputMeshType::PointsContainer::Iterator      OutputPointsContainerIterator;
-		InputPointsContainerPointer allInputPoints = inputMesh->GetPoints();
-		InputPointsContainerConstIterator inputPointIt = allInputPoints->Begin();
-		InputPointsContainerConstIterator inputPointItEnd = allInputPoints->End();
-		while( inputPointIt != inputPointItEnd ){
-			outputMesh->SetPoint( inputPointIt.Index(), inputPointIt.Value() );
-			inputPointIt++;
-		}
-		outputMesh->SetLastCellId( inputMesh->GetLastCellId() );
-		outputMesh->BuildCellLinks();
-	}
-
 	template<typename MeshType>
 	void
-		copyPointsFromPolydataToMesh(vtkPolyData* m_PolyData, typename MeshType::Pointer mesh)
+		copyPolyDataToMeshPoints(vtkPolyData* m_PolyData, typename MeshType::Pointer mesh)
 	{
 		const unsigned int numberOfPointsInPolydata = m_PolyData->GetNumberOfPoints();
 		const unsigned int numberOfPointsInMesh = mesh->GetNumberOfPoints();
@@ -2056,6 +2026,8 @@ namespace km
 			{
 			case CellType::LINE_CELL:
 				{
+					lines->InsertNextCell(pts);
+					numberoflines++;
 					break;
 				}	
 			case CellType::TRIANGLE_CELL:

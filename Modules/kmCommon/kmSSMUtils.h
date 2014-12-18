@@ -22,7 +22,7 @@ namespace km
 		typedef typename StatisticalModelType::ImplType     StatisticalModelImplType;
 		typedef statismo::MatrixType                        StatismoMatrixType;
 		typedef statismo::VectorType                        StatismoVectorType;
-		itkStaticConstMacro(PointDimension, unsigned int, MeshType::PointDimension);
+		itkStaticConstMacro(Dimension, unsigned int, MeshType::PointDimension);
 		
 		SSMUtils()
 		{
@@ -170,12 +170,12 @@ namespace km
 		void fillPointSetIntoStatismoMatrix(const MeshType* mesh, StatismoMatrixType& matrix)
 		{
 			unsigned int numberOfLandmarks = mesh->GetNumberOfPoints();
-			matrix.setConstant(numberOfLandmarks, PointDimension+1, 1.0);
+			matrix.setConstant(numberOfLandmarks, Dimension+1, 1.0);
 			unsigned long rowcnt = 0;
 			for (int idx=0;idx<numberOfLandmarks;idx++)
 			{
 				PointType pt = mesh->GetPoint(idx);
-				for (int d=0;d<PointDimension;d++)
+				for (int d=0;d<Dimension;d++)
 				{
 					matrix(rowcnt, d) = pt[d];
 				}
@@ -186,12 +186,12 @@ namespace km
 		void fillPointSetIntoStatismoVector(const MeshType* mesh, StatismoVectorType& matrix)
 		{
 			unsigned int numberOfLandmarks = mesh->GetNumberOfPoints();
-			matrix.setZero( numberOfLandmarks*PointDimension, 1);
+			matrix.setZero( numberOfLandmarks*Dimension, 1);
 			unsigned long rowcnt = 0;
 			for (int idx=0;idx<numberOfLandmarks;idx++)
 			{
 				PointType pt = mesh->GetPoint(idx);
-				for (int d=0;d<PointDimension;d++)
+				for (int d=0;d<Dimension;d++)
 				{
 					matrix(rowcnt, 0) = pt[d];
 					rowcnt++;

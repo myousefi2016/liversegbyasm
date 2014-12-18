@@ -31,7 +31,7 @@ m_LamdaValue3(0),
 m_LamdaValue4(0), 
 m_LamdaValueX(0), 
 lamdaX(1),
-m_CurrentModelType(ModelType::VTKShape)
+m_CurrentModelType(VTKShape)
 {
   this->setupUi(this); 
 
@@ -99,7 +99,7 @@ void ModelViewer::getModelFileName()
 
 void ModelViewer::loadITKShapeModel()
 {
-  m_CurrentModelType = ModelType::ITKShape;
+  m_CurrentModelType = ITKShape;
   getModelFileName();
 
   if (m_ModelFileName.empty())
@@ -141,7 +141,7 @@ void ModelViewer::loadITKShapeModel()
 
 void ModelViewer::loadVTKShapeModel()
 {
-  m_CurrentModelType = ModelType::VTKShape;
+  m_CurrentModelType = VTKShape;
   getModelFileName();
 
   if (m_ModelFileName.empty())
@@ -222,7 +222,7 @@ void ModelViewer::setLamdaXIndex(int v)
 void ModelViewer::updateModelSample()
 {
   std::cout<<"Lamda1: "<<m_LamdaValue1<<",  ""Lamda2: "<<m_LamdaValue2<<",  ""Lamda3: "<<m_LamdaValue3<<",  ""Lamda4: "<<m_LamdaValue4<<std::endl;
-  if( m_CurrentModelType == ModelType::VTKShape )
+  if( m_CurrentModelType == VTKShape )
   {
 		VectorType coefficients = VectorType::Zero(polyDataModel->GetNumberOfPrincipalComponents());
 		//std::cout<<"here!"<<std::endl;
@@ -243,7 +243,7 @@ void ModelViewer::updateModelSample()
     qvtkWidget->update();
 		//std::cout<<"here!"<<std::endl;
   }
-  else if( m_CurrentModelType == ModelType::ITKShape )
+  else if( m_CurrentModelType == ITKShape )
 	{
 		//typedef MeshStatisticalModelType::VectorType VectorType;
 		//VectorType coefficients;
@@ -279,11 +279,11 @@ void ModelViewer::save()
 	QString fileName = QFileDialog::getSaveFileName(this,tr("Open Model File"), dir.absolutePath() , filter );
 	std::string savefilename = fileName.toStdString();
 
-	if( m_CurrentModelType == ModelType::VTKShape )
+	if( m_CurrentModelType == VTKShape )
 	{
 		km::writePolyData( savefilename, sampledPolyData );
 	}
-	else if( m_CurrentModelType == ModelType::ITKShape )
+	else if( m_CurrentModelType == ITKShape )
 	{
 		km::writeMesh<MeshType>( savefilename, sampledMesh );
 	}

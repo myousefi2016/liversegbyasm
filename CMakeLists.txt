@@ -20,17 +20,21 @@ FIND_PACKAGE(Qt4 REQUIRED)
 include (${QT_USE_FILE})
 
 set(LiverSegSSM_SOURCE_DIR ${PROJECT_SOURCE_DIR})
-set(LiverSegSSM_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/Modules/itkAuxiliary
+set(LiverSegSSM_INCLUDE_DIR ${PROJECT_SOURCE_DIR}/Modules
+							${PROJECT_SOURCE_DIR}/Modules/itkAuxiliary
 							${PROJECT_SOURCE_DIR}/Modules/kmCommon
 							${PROJECT_SOURCE_DIR}/Modules/statismo
-							${PROJECT_SOURCE_DIR}/Modules/AdaSegment)
+							${PROJECT_SOURCE_DIR}/Modules/AdaSegment
+							${PROJECT_SOURCE_DIR}/Modules/ACVD
+							${PROJECT_SOURCE_DIR}/Modules/ACVD/Common
+							${PROJECT_SOURCE_DIR}/Modules/ACVD/DiscreteRemeshing)
 
 MESSAGE(STATUS "Start to build 3rdParty libraries..")
 add_subdirectory(Modules/ACVD)
 add_subdirectory(Modules/kmCommon)
 add_subdirectory(Modules/AdaSegment)
 
-set(KM_LIBRARIES kmCommon)
+set(KM_LIBRARIES kmCommon ACVD)
 include_directories(${LiverSegSSM_INCLUDE_DIR})
 
 add_library(LiverSegmentationAPI STATIC LiverSegmentationAPI.cpp)

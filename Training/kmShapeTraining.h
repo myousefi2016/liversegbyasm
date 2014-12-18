@@ -185,7 +185,7 @@ namespace km
 
 			vtkSmartPointer<vtkPolyData> polydata = km::mesh2PolyData<SimplexMeshType>(liverMesh);
 			polydata = km::smoothPolyData( polydata, 100 );
-			km::copyPointsFromPolydataToMesh<SimplexMeshType>( polydata, liverMesh );
+			km::copyPolyDataToMeshPoints<SimplexMeshType>( polydata, liverMesh );
 			km::loadSimplexMeshGeometryData<SimplexMeshType>(geoImage, liverMesh);
 
 			km::writeMesh<SimplexMeshType>( outputdir, "elasticWarpedMesh", i, ".vtk", liverMesh );

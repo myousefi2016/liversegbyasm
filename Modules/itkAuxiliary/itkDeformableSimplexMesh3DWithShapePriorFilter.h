@@ -43,14 +43,10 @@
 #include <set>
 #include <map>
 
+#include "itkCompositeTransform.h"
 #include "itkAffineTransform.h"
 #include "statismo_ITK/itkStatisticalShapeModelTransform.h"
-#include "kmGlobal.h"
-#include "kmProfileExtractor.h"
-#include "kmProfileClassifier.h"
-#include "kmSSMUtils.h"
-#include "kmUtility.h"
-#include "kmVtkItkUtility.h"
+#include "kmCommon.h"
 
 namespace itk
 {
@@ -65,6 +61,62 @@ namespace itk
 	*
 	* \ingroup ITKDeformableMesh
 	*/
+
+	struct ClusterItem
+	{
+		int clusterLabel;
+		int clusterCount;
+		double clusterForce;
+	};
+
+	//This is for multiple points can share same one cluster item.
+	class ClusterPool
+	{
+	public:
+		void AddClusterMapping(int pointId, int clusterLabel)
+		{
+			ClusterItem* item = clustersSet[clusterLabel];
+			if (item == NULL){
+				item = new ClusterItem;
+				item->clusterLabel = clusterLabel;
+				item->clusterCount = 1;
+				item->clusterForce = 0.0;
+				clustersSet[clusterLabel] = item;
+			}else{
+				item->clusterCount++;
+			}
+			clustersMap[pointId] = item;
+		}
+
+		void ClearForce()
+		{
+			for (std::map<int, ClusterItem*>::iterator it=clustersSet.begin();it!=clustersSet.end();it++)
+			{
+				it->second->clusterForce = 0.0;
+			}
+		}
+
+		ClusterItem* GetClusterItemByPointId(int pointId)
+		{
+			ClusterItem* item = clustersMap[pointId];
+			if (item == NULL){
+				std::cerr<<"No cluster for point: "<<pointId<<std::endl;
+				ClusterItem * tmpItem = new ClusterItem;
+				return tmpItem;
+			}
+			return item;
+		}
+	private:
+		std::map<int, ClusterItem*> clustersSet; //<clusterLabel, clusterItem>
+		std::map<int, ClusterItem*> clustersMap; //<pointId, clusterItem>
+	};
+
+	enum Phase
+	{
+		Lv1,
+		Lv2
+	};
+
 	template< class TInputMesh, class TOutputMesh, class TInputImage, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	class ITK_EXPORT DeformableSimplexMesh3DWithShapePriorFilter
 		:public DeformableSimplexMesh3DFilter< TInputMesh, TOutputMesh >
@@ -122,6 +174,8 @@ namespace itk
 		typedef typename TShapeTransform                  ShapeTransformType;
 		typedef typename ShapeTransformType::Pointer      ShapeTransformPointer;
 		typedef typename ShapeTransformType::ConstPointer ShapeTransformConstPointer;
+		typedef CompositeTransform<double, Dimension>     CompositeTransformType;
+		typedef typename CompositeTransformType::Pointer  CompositeTransformPointer;
 
 		typedef km::ProfileExtractor<InputImageType> ProfileExtractorType;
 		typedef km::SSMUtils<InputMeshType, 
@@ -129,6 +183,7 @@ namespace itk
 							 RigidTransformType, 
 							 ShapeTransformType>     SSMUtilsType;
 		typedef km::ProfileClassifier                ProfileClassifierType;
+		typedef km::ClassifierUtils<InputMeshType, ProfileExtractorType> ClassifierUtilsType;
 
 		itkSetMacro(Kappa, double);
 		itkGetConstMacro(Kappa, double);
@@ -169,6 +224,11 @@ namespace itk
 			return this->m_LiverClassifier;
 		}
 
+		InputMeshPointer GetShapeMesh()
+		{
+			return this->m_ShapeMesh;
+		}
+
 	protected:
 		DeformableSimplexMesh3DWithShapePriorFilter();
 		~DeformableSimplexMesh3DWithShapePriorFilter();
@@ -182,11 +242,19 @@ namespace itk
 		
 		virtual void Initialize();
 		
+		virtual void ComputeClusteredForce();
+
 		virtual void ComputeDisplacement();
 		
 		virtual void GenerateData();
 		
-		virtual void Intervene( );
+		virtual void IntervenePre();
+
+		virtual void IntervenePost();
+
+		virtual void Cluster();
+
+		virtual void UpdateShape();
 
 		/**
 		* Compute the external force component
@@ -206,6 +274,17 @@ namespace itk
 		SSMUtilsType                 m_SSMUtils;
 		ProfileClassifierType*       m_BoundaryClassifier;
 		ProfileClassifierType*       m_LiverClassifier;
+		CompositeTransformPointer    m_CompositeTransform;
+
+		ClassifierUtilsType          m_ClassifierUtils;
+
+		InputMeshPointer             m_ReferenceShapeMesh;
+		InputMeshPointer             m_ShapeMesh;
+		InputMeshPointer             m_DeformedMesh;
+		ClusterPool                  m_ClusterPool;
+
+		Phase                        m_Phase;
+		
 	}; // end of class
 } // end namespace itk
 
