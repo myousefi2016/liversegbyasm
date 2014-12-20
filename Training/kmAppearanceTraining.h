@@ -252,9 +252,13 @@ namespace km
 					profileExtractor.extractFeatureSet(features, profileUnitBoundary.category, geodata, ipoint_inside);
 					profileUnitBoundary.writeLine(idx, IPClass, features);
 
-					////Plain
-					//profileExtractor.extractFeatureSet(features, profileUnitPlain.category, geodata, ipoint_inside);
-					//profileUnitPlain.writeLine(idx, IPClass, features);
+					//Plain
+					if (t<1)
+					{
+						profileExtractor.extractFeatureSet(features, profileUnitPlain.category, geodata, ipoint_inside);
+						profileUnitPlain.writeLine(idx, IPClass, features);
+					}
+					
 				}
 
 				//提取当前位置的Profile
@@ -267,8 +271,11 @@ namespace km
 					profileUnitBoundary.writeLine(idx, BPClass, features);
 
 					//Plain
-					profileExtractor.extractFeatureSet(features, profileUnitPlain.category, geodata, ipoint_boundary);
-					profileUnitPlain.writeLine(idx, BPClass, features);
+					if (t<1)
+					{
+						profileExtractor.extractFeatureSet(features, profileUnitPlain.category, geodata, ipoint_boundary);
+						profileUnitPlain.writeLine(idx, BPClass, features);
+					}
 
 					//Coordinate
 					profileExtractor.extractFeatureSet(features, profileUnitCoordinate.category, geodata, ipoint_boundary);
@@ -286,8 +293,11 @@ namespace km
 					profileUnitLiver.writeLine(idx, OPClass, features);
 
 					//Plain
-					profileExtractor.extractFeatureSet(features, profileUnitPlain.category, geodata, ipoint_outside);
-					profileUnitPlain.writeLine(idx, OPClass, features);
+					if (t<1)
+					{
+						profileExtractor.extractFeatureSet(features, profileUnitPlain.category, geodata, ipoint_outside);
+						profileUnitPlain.writeLine(idx, OPClass, features);
+					}
 				}
 
 				geoIt++;

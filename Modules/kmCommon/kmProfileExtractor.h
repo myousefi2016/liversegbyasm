@@ -136,8 +136,8 @@ namespace km
 				if (featureSet.size() == 0){
 					this->addPoints(profileCategory, PROFILE_DIM, PROFILE_SPACING);
 					this->extractIntensityStatistics(featureSet);
-					this->extractGradientSet(featureSet);
-					//this->extractVarianceSet(featureSet);
+					this->extractGradientMoment(featureSet);
+					this->extractTangentFeatureSet(featureSet);
 					if (enableCacheFlag){
 						setCachedFeatures(featureSet, profileCategory, offset);
 					}
@@ -152,6 +152,7 @@ namespace km
 				if (featureSet.size() == 0){
 					this->addPoints(profileCategory, PROFILE_DIM, PROFILE_SPACING);
 					this->extractIntensityStatistics(featureSet);
+					this->extractGradientMoment(featureSet);
 					this->extractTangentFeatureSet(featureSet);
 					if (enableCacheFlag){
 						setCachedFeatures(featureSet, profileCategory, offset);
@@ -184,20 +185,20 @@ namespace km
 
 		void addPoints(PROFILE_CATEGORY profileCategory, int profile_dimension, double profile_spacing)
 		{
-			int shiftDim;
-			if (profileCategory == PLAIN){
-				shiftDim = profile_dimension-1;
-			}else if (profileCategory == BOUNDARY){
-				shiftDim = profile_dimension-1;
-			}else if (profileCategory == LIVER){
-				shiftDim = profile_dimension-1;
-			}else{
-				shiftDim = profile_dimension-1;
-			}
+			//int shiftDim;
+			//if (profileCategory == PLAIN){
+			//	shiftDim = profile_dimension/2;
+			//}else if (profileCategory == BOUNDARY){
+			//	shiftDim = profile_dimension/2;
+			//}else if (profileCategory == LIVER){
+			//	shiftDim = profile_dimension/2;
+			//}else{
+			//	shiftDim = profile_dimension-1;
+			//}
 
-			PointType startPt = this->currentPoint - normal*shiftDim*profile_spacing;
+			PointType startPt = this->currentPoint;
 			for ( int i=0;i<profile_dimension;i++ ){
-				pointSet.push_back(startPt + normal*profile_spacing*i);
+				pointSet.push_back(startPt - normal*profile_spacing*i);
 			}
 		}
 
@@ -268,9 +269,9 @@ namespace km
 		void extractMean( FeatureSetType & featureSet )
 		{
 			double meanValue = -1024;
-			if (this->meanFunc->IsInsideBuffer(pointSet[i]))
+			if (this->meanFunc->IsInsideBuffer(this->currentPoint))
 			{
-				meanValue = this->meanFunc->Evaluate(pointSet[i]);
+				meanValue = this->meanFunc->Evaluate(this->currentPoint);
 				meanValue = mappingItensity(meanValue);
 			}
 			featureSet.push_back(meanValue);
@@ -279,12 +280,22 @@ namespace km
 		void extractMedian( FeatureSetType & featureSet )
 		{
 			double medianValue = -1024;
-			if (this->medianFunc->IsInsideBuffer(pointSet[i]))
+			if (this->medianFunc->IsInsideBuffer(this->currentPoint))
 			{
-				medianValue = this->medianFunc->Evaluate(pointSet[i]);
+				medianValue = this->medianFunc->Evaluate(this->currentPoint);
 				medianValue = mappingItensity(medianValue);
 			}
 			featureSet.push_back(medianValue);
+		}
+
+		void extractGradient( FeatureSetType & featureSet )
+		{
+			GradientImageType::PixelType gradientValue = 0.0;
+			if (this->gradientFunc->IsInsideBuffer( this->currentPoint ))
+			{
+				gradientValue = this->gradientFunc->Evaluate( this->currentPoint );
+			}
+			featureSet.push_back(gradientValue);
 		}
 
 		typename GradientImageType::PixelType extractGradient( PointType & pt )

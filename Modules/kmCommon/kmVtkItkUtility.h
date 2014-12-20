@@ -1387,16 +1387,22 @@ namespace km
 		switch (interpolatorType)
 		{
 		case 0:
-			LinearInterpolateType::Pointer interpolator = LinearInterpolateType::New();
-			resample->SetInterpolator( interpolator );
-			break;
+			{
+				LinearInterpolateType::Pointer interpolator = LinearInterpolateType::New();
+				resample->SetInterpolator( interpolator );
+				break;
+			}
 		case 1:
-			NearestNeighborInterpolateType::Pointer interpolator2 = NearestNeighborInterpolateType::New();
-			resample->SetInterpolator( interpolator2 );
-			break;
+			{
+				NearestNeighborInterpolateType::Pointer interpolator2 = NearestNeighborInterpolateType::New();
+				resample->SetInterpolator( interpolator2 );
+				break;
+			}
 		default:
-			std::cout<<"Unknown interpolator type!"<<std::endl;
-			break;
+			{
+				std::cout<<"Unknown interpolator type!"<<std::endl;
+				break;
+			}
 		}
 		resample->Update();
 		return resample->GetOutput();
@@ -2158,7 +2164,7 @@ namespace km
 	//If computeAll=false, then only normal will be computed. Otherwise all geometry data like mean curve, sphere radius etc. will be computed.
 	template<class MeshType>
 	void
-		ComputeGeometry(typename MeshType* inputMesh, bool computeAll = false)
+		ComputeGeometry(typename MeshType* inputMesh, bool computeAll = true)
 	{
 		typedef typename MeshType::GeometryMapType      GeometryMapType;
 		typedef typename GeometryMapType::Pointer       GeometryMapPointer;

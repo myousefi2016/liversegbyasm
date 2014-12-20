@@ -13,6 +13,7 @@
 #include <vector>
 #include <map>
 #include <fstream>
+#include <string>
 
 static double SIGMA = 1.0; //采样梯度profile时，计算梯度场采样的参数sigma
 static int PROFILE_DIM = 9;
@@ -22,7 +23,7 @@ static double SHIFT_OUTSIDE = 3.0; //采样表面外profile时，样本从表面上向表面外偏
 static double SHIFT_BOUNDARY = 1.0;
 static int NUMBER_OF_INSIDE_PER_POINT = 3; // 在每个MESH点附近采样inside profile的数量。
 static int NUMBER_OF_BOUNDARY_PER_POINT = 6; // 在每个MESH点附近采样boundary profile的数量。
-static int NUMBER_OF_OUTSIDE_PER_POINT = 6; // 在每个MESH点附近采样outside profile的数量。
+static int NUMBER_OF_OUTSIDE_PER_POINT = 9; // 在每个MESH点附近采样outside profile的数量。
 
 #define RESAMPLE_SPACING 2.0
 
@@ -99,6 +100,7 @@ namespace km
 	static double g_shape_penalty = 0.0;
 	static double g_fitting_error_threshold = 0.6;
 	static bool   g_disable_abnormal = true;
+	static char   g_output_dir[1024];
 
 	class Config
 	{
