@@ -178,7 +178,7 @@ namespace itk
 
 		InputMeshPointer GetShapeMesh()
 		{
-			return this->m_ShapeMesh;
+			return this->m_UpdatedShapeMesh;
 		}
 
 		struct ClusterItem
@@ -188,6 +188,7 @@ namespace itk
 			int clusterCount;
 			VectorType normal_force;
 			double force;
+			double distanceFromMean;
 		};
 
 		//This is for multiple points can share same one cluster item.
@@ -203,6 +204,7 @@ namespace itk
 					item->clusterCount = 1;
 					item->normal_force.Fill(0);
 					item->force = 0.0;
+					item->distanceFromMean = 0.0;
 					clustersSet[clusterLabel] = item;
 				}else{
 					item->clusterCount++;
@@ -217,7 +219,13 @@ namespace itk
 					ClusterItem* item = it->second;
 					item->normal_force.Fill(0);
 					item->force = 0.0;
+					item->distanceFromMean = 0.0;
 				}
+			}
+
+			void Reset()
+			{
+				clustersSet.clear();
 			}
 
 			void Update()
@@ -227,6 +235,7 @@ namespace itk
 					ClusterItem* item = it->second;
 					item->normal_force /= item->clusterCount;
 					item->force /= item->clusterCount;
+					item->distanceFromMean /= item->clusterCount;
 				}
 			}
 
@@ -257,8 +266,6 @@ namespace itk
 		void PrintSelf(std::ostream & os, Indent indent) const;
 		
 		virtual void Initialize();
-		
-		//virtual void ComputeClusteredForce();
 
 		virtual void ComputeDisplacement();
 		
@@ -268,7 +275,7 @@ namespace itk
 
 		virtual void IntervenePost();
 
-		virtual void Cluster(); //Curature cluster.
+		virtual void Cluster(int blockSize); //Curature cluster.
 
 		virtual void UpdateShape();
 
@@ -295,8 +302,10 @@ namespace itk
 		ClassifierUtilsType          m_ClassifierUtils;
 
 		InputMeshPointer             m_ReferenceShapeMesh;
-		InputMeshPointer             m_ShapeMesh;
-		InputMeshPointer             m_ShapeMeshBeforeFitting;
+		InputMeshPointer             m_MeanShapeMesh;
+
+		InputMeshPointer             m_UpdatedShapeMesh;
+		InputMeshPointer             m_UpdatedMeanShapeMesh;
 		ClusterPool                  m_ClusterPool;
 
 		Phase                        m_Phase;

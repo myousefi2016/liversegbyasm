@@ -147,12 +147,12 @@ namespace km
 			inputImage = km::extractRoiByTemplateMatching<ShortImageType, ShortImageType>( inputImage, atlasImage );
 		}
 
+		KM_DEBUG_INFO("Histogram matching..");
+		inputImage = km::histogramMatch<ShortImageType>( inputImage, atlasImage );
+
 		if(WRITE_MIDDLE_RESULT){
 			km::writeImage<ShortImageType>( outputdir, "inputImage.nii.gz", inputImage );
 		}
-
-		KM_DEBUG_INFO("Histogram matching..");
-		inputImage = km::histogramMatch<ShortImageType>( inputImage, atlasImage );
 
 		KM_DEBUG_INFO("Smooth input image..");
 		inputImage = km::minMaxSmooth<ShortImageType>( inputImage, 3, 1.0, 1 );
@@ -447,7 +447,7 @@ namespace km
 																	 ShapeTransformType> DeformableFilterType;
 			DeformableFilterType::Pointer deformaFilter = DeformableFilterType::New();
 			deformaFilter->SetAlpha(0.3);
-			deformaFilter->SetKappa(0.2);
+			deformaFilter->SetKappa(0.3);
 			deformaFilter->SetBeta(0.1);
 			deformaFilter->SetGamma(0.2);
 			deformaFilter->SetRigidity(2);
@@ -475,18 +475,18 @@ namespace km
 		memorymeter.Stop( "fitting" );
 		chronometer.Stop( "fitting" );
 
-		/*
+		
 		KM_DEBUG_INFO( "Start to genereate final segmentation image..." );
 
 		km::loadSimplexMeshGeometryData<MeshType>(geoImage, deformedMesh);
 		MeshType::Pointer triangleLiverMesh = km::simplexMeshToTriangleMesh<MeshType, MeshType>(deformedMesh);
-		km::writeMesh<MeshType>( outputdir, "triangleLiverMesh.vtk", triangleLiverMesh );
+		//km::writeMesh<MeshType>( outputdir, "triangleLiverMesh.vtk", triangleLiverMesh );
 
 		UCharImageType::Pointer liversegmask = km::generateBinaryFromMesh<MeshType, UCharImageType, ShortImageType>(triangleLiverMesh, inputCached);
 		KM_DEBUG_INFO("Fill slice hole...");
-		km::fillSliceHole<UCharImageType>(liversegmask);
+		//km::fillSliceHole<UCharImageType>(liversegmask);
 		km::writeImage<UCharImageType>( outputdir, "finalResult.nii.gz", liversegmask );
-		*/
+		
 
 		memorymeter.Stop( "segmentation" );
 		chronometer.Stop( "segmentation" );

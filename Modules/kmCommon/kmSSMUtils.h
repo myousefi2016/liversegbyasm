@@ -48,8 +48,42 @@ namespace km
 			m_ShapeTransform = stfm;
 			m_ShapeParametersPre = m_ShapeTransform->GetParameters();
 		}
+
+		void rigidTransformFitting(const MeshType* targetMesh)
+		{
+			if (m_SSM == NULL)
+			{
+				std::cout<<"SSM cannot be null."<<std::endl;
+				return;
+			}
+
+			if (m_RigidTranform == NULL)
+			{
+				m_RigidTranform = RigidTransformType::New();
+				m_RigidTranform->SetIdentity();
+			}
+
+			unsigned int numberOfLandmarks = m_ReferenceShapeMesh->GetNumberOfPoints();
+			
+			/*****************Fit rigid parameters****************/
+			MeshType::ConstPointer sourceMeshForRigid = km::transformMesh<MeshType, ShapeTransformType>(m_ReferenceShapeMesh, m_ShapeTransform);
+			MeshType::ConstPointer targetMeshForRigid = targetMesh;
+
+			StatismoMatrixType sourceMatrixForRigid, targetMatrixForRigid;
+			fillPointSetIntoStatismoMatrix(sourceMeshForRigid, sourceMatrixForRigid);
+			fillPointSetIntoStatismoMatrix(targetMeshForRigid, targetMatrixForRigid);
+
+			StatismoVectorType I = StatismoVectorType::Ones(sourceMatrixForRigid.cols());
+			StatismoMatrixType Mmatrix = sourceMatrixForRigid.transpose() * sourceMatrixForRigid;
+			Mmatrix.diagonal() += I;
+			StatismoMatrixType MInverseMatrix = Mmatrix.inverse();
+			const StatismoMatrixType& WT = sourceMatrixForRigid.transpose();
+			StatismoMatrixType coeffsRigid = MInverseMatrix * (WT * targetMatrixForRigid);
+
+			UpdateRigidTransform(coeffsRigid.transpose());
+		}
 		
-		void compositeTransformFitting(const MeshType* targetMesh)
+		void shapeTransformFitting(const MeshType* targetMesh)
 		{
 			if (m_SSM == NULL)
 			{
@@ -64,58 +98,36 @@ namespace km
 				m_ShapeTransform->SetIdentity();
 			}
 
-			if (m_RigidTranform == NULL)
-			{
-				m_RigidTranform = RigidTransformType::New();
-				m_RigidTranform->SetIdentity();
-			}
-
 			if (m_ShapeTransform->GetUsedNumberOfCoefficients() > m_ShapeTransform->GetNumberOfParameters())
 			{
 				m_ShapeTransform->SetUsedNumberOfCoefficients(m_ShapeTransform->GetNumberOfParameters());
 			}
 			
-			unsigned int numberOfLandmarks = m_ReferenceShapeMesh->GetNumberOfPoints();
-			{
-				/*****************Fit rigid parameters****************/
-				MeshType::ConstPointer sourceMeshForRigid = km::transformMesh<MeshType, ShapeTransformType>(m_ReferenceShapeMesh, m_ShapeTransform);
-				MeshType::ConstPointer targetMeshForRigid = targetMesh;
+			/*****************Fit shape parameters****************/
+			RigidTransformType::Pointer inversedRigidTransform = RigidTransformType::New();
+			m_RigidTranform->GetInverse( inversedRigidTransform );
+			MeshType::Pointer targetMeshForShape = km::transformMesh<MeshType, RigidTransformType>(targetMesh, inversedRigidTransform);
+			MeshType::Pointer sourceMeshForShape = this->m_SSM->DrawMean();
 
-				StatismoMatrixType sourceMatrixForRigid, targetMatrixForRigid;
-				fillPointSetIntoStatismoMatrix(sourceMeshForRigid, sourceMatrixForRigid);
-				fillPointSetIntoStatismoMatrix(targetMeshForRigid, targetMatrixForRigid);
+			StatismoVectorType sourceMatrixForShape, targetMatrixForShape;
+			const StatismoMatrixType & basisMatrixForShape = this->m_SSM->GetstatismoImplObj()->GetPCABasisMatrix();
+			fillPointSetIntoStatismoVector(sourceMeshForShape, sourceMatrixForShape);
+			fillPointSetIntoStatismoVector(targetMeshForShape, targetMatrixForShape);
 
-				StatismoVectorType I = StatismoVectorType::Ones(sourceMatrixForRigid.cols());
-				StatismoMatrixType Mmatrix = sourceMatrixForRigid.transpose() * sourceMatrixForRigid;
-				Mmatrix.diagonal() += I;
-				StatismoMatrixType MInverseMatrix = Mmatrix.inverse();
-				const StatismoMatrixType& WT = sourceMatrixForRigid.transpose();
-				StatismoMatrixType coeffsRigid = MInverseMatrix * (WT * targetMatrixForRigid);
+			StatismoVectorType I = StatismoVectorType::Ones(basisMatrixForShape.cols());
+			StatismoMatrixType Mmatrix = basisMatrixForShape.transpose() * basisMatrixForShape;
+			Mmatrix.diagonal() += I;
+			StatismoMatrixType MInverseMatrix = Mmatrix.inverse();
+			const StatismoMatrixType& WT = basisMatrixForShape.transpose();
+			StatismoVectorType coeffsShape = MInverseMatrix * (WT * (targetMatrixForShape-sourceMatrixForShape));
 
-				UpdateRigidTransform(coeffsRigid.transpose());
-			}
+			UpdateShapeTransform(coeffsShape);
+		}
 
-			{
-				/*****************Fit shape parameters****************/
-				RigidTransformType::Pointer inversedRigidTransform = RigidTransformType::New();
-				m_RigidTranform->GetInverse( inversedRigidTransform );
-				MeshType::Pointer targetMeshForShape = km::transformMesh<MeshType, RigidTransformType>(targetMesh, inversedRigidTransform);
-				MeshType::Pointer sourceMeshForShape = this->m_SSM->DrawMean();
-
-				StatismoVectorType sourceMatrixForShape, targetMatrixForShape;
-				const StatismoMatrixType & basisMatrixForShape = this->m_SSM->GetstatismoImplObj()->GetPCABasisMatrix();
-				fillPointSetIntoStatismoVector(sourceMeshForShape, sourceMatrixForShape);
-				fillPointSetIntoStatismoVector(targetMeshForShape, targetMatrixForShape);
-
-				StatismoVectorType I = StatismoVectorType::Ones(basisMatrixForShape.cols());
-				StatismoMatrixType Mmatrix = basisMatrixForShape.transpose() * basisMatrixForShape;
-				Mmatrix.diagonal() += I;
-				StatismoMatrixType MInverseMatrix = Mmatrix.inverse();
-				const StatismoMatrixType& WT = basisMatrixForShape.transpose();
-				StatismoVectorType coeffsShape = MInverseMatrix * (WT * (targetMatrixForShape-sourceMatrixForShape));
-
-				UpdateShapeTransform(coeffsShape);
-			}
+		void compositeTransformFitting(const MeshType * targetMesh)
+		{
+			this->rigidTransformFitting(targetMesh);
+			this->shapeTransformFitting(targetMesh);
 		}
 
 		double calShapeParaDiff()
