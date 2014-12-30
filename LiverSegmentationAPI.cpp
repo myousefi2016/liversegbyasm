@@ -450,7 +450,7 @@ namespace km
 			deformaFilter->SetKappa(0.3);
 			deformaFilter->SetBeta(0.1);
 			deformaFilter->SetGamma(0.2);
-			deformaFilter->SetRigidity(2);
+			deformaFilter->SetRigidity(1);
 			deformaFilter->SetIterations(100);
 			deformaFilter->SetInput(deformedMesh);
 			deformaFilter->SetInputImage(inputImage);
@@ -459,7 +459,7 @@ namespace km
 			deformaFilter->SetShapeTransform(shapeTransform);
 			deformaFilter->SetBoundaryClassifier(&ProfileClassifier_Boundary);
 			deformaFilter->SetLiverClassifier(&ProfileClassifier_Liver);
-			itk::SimpleFilterWatcher watcher(deformaFilter, "DeformableSimplexMesh3DWithShapePriorFilter");
+			//itk::SimpleFilterWatcher watcher(deformaFilter, "DeformableSimplexMesh3DWithShapePriorFilter");
 			deformaFilter->Update();
 
 			if (notifier!=NULL)

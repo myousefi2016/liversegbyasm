@@ -86,7 +86,7 @@ namespace km
 		void openTxtStream()
 		{
 			if (!sampleFile.is_open()){
-				sampleFile.open (sampleTxtFilename, std::ofstream::out | std::ofstream::app);
+				sampleFile.open (sampleTxtFilename, std::ofstream::out | std::ofstream::trunc);
 			}
 		}
 

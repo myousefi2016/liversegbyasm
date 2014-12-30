@@ -6,3 +6,9 @@
 
 #disable_abnormal
 0
+
+#number_clusters
+1
+
+#cluster_min_dist
+5.0

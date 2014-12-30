@@ -101,6 +101,8 @@ namespace km
 	static double g_fitting_error_threshold = 0.6;
 	static bool   g_disable_abnormal = true;
 	static char   g_output_dir[1024];
+	static int    g_number_clusters = 5;
+	static double g_cluster_min_dist = 5.0;
 
 	class Config
 	{
@@ -124,6 +126,12 @@ namespace km
 							getline (myfile,line);
 							double val = atof(line.c_str());
 							g_disable_abnormal = val>0?true:false;
+						}else if (line == "#number_clusters"){
+							getline (myfile,line);
+							g_number_clusters = atoi( line.c_str() );
+						}else if (line == "#cluster_min_dist"){
+							getline (myfile,line);
+							g_cluster_min_dist = atof( line.c_str() );
 						}
 					}
 					myfile.close();
@@ -137,6 +145,7 @@ namespace km
 			std::cout<<"shape_penalty: "<<g_shape_penalty<<std::endl;
 			std::cout<<"fitting_error_threshold: "<<g_fitting_error_threshold<<std::endl;
 			std::cout<<"diable_abnormal: "<<g_disable_abnormal<<std::endl;
+			std::cout<<"number_clusters: "<<g_number_clusters<<std::endl;
 		}
 	};
 }

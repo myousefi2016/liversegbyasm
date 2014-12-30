@@ -47,6 +47,16 @@ namespace km
 		{
 			return 1.0 - cdf_inside(x);
 		}
+		
+		static double setToBetween(double val, double lowerBound, double upperBound)
+		{
+			if(val<lowerBound)
+				return lowerBound;
+			else if(val>upperBound)
+				return upperBound;
+			else
+				return val;
+		}
 	};
 	
 	/************************************************************************/

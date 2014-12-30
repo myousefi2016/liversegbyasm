@@ -1,28 +1,33 @@
 #include <iostream>
 #include <string>
 
-#include "testLib.h"
-
-#define TestMacro(X) std::cout<<X<<std::endl;
-
-void test(const std::string inputstr)
-{
-	//std::cout<<inputstr.<<std::endl;
-}
+#include "itkVector.h"
 
 int main(int argc, char* argv[])
 {
-	func1();
-	func2();
 
-	Container c;
-	c.print();
+	itk::Vector<double, 4> vec;
+	vec[0] = 1;
+	vec[1] = 20;
+	vec[2] = 200;
+	vec[3] = 300;
 
-	func3<double>(3.0);
+	vec[0] = 1.0/(vec[0]+1.0);
+	vec[1] = 1.0/(vec[1]+1.0);
+	vec[2] = 1.0/(vec[2]+1.0);
+	vec[3] = 1.0/(vec[3]+1.0);
 
-	TestMacro(3.14);
+	double sum = vec[0]+vec[1]+vec[2]+vec[3];
 
-	test(NULL);
+	vec /= sum;
+
+	std::cout<<vec<<std::endl;
+
+	const char* tmp = NULL;
+	char str[1024];
+	sprintf(str, "ABCD%sEFG", tmp);
+
+	std::cout<<str<<std::endl;
 
 	system("pause");
 

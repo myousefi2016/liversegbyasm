@@ -340,7 +340,7 @@ namespace km
 			bool found = false;
 
 			double searchedDist = 0;
-			unsigned int maxSearchPoints = 20;
+			unsigned int maxSearchPoints = 10;
 
 			VectorType normal;
 			normal.Set_vnl_vector(geodata->normal.Get_vnl_vector());

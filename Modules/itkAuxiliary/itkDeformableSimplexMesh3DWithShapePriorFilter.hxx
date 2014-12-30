@@ -44,6 +44,9 @@ namespace itk
 
 	{
 		m_Kappa = 0.1;
+		m_NumberOfShapeClusters = 1;
+		m_MinShapeDifference = 0.000001;//0.08;
+		m_IterationsLv1 = 50;
 	}
 
 	template< class TInputMesh, class TOutputMesh, class TInputImage, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
@@ -154,17 +157,12 @@ namespace itk
 		}
 
 		//Initialize shape mesh
-		m_ReferenceShapeMesh = this->GetStatisticalModel()->GetRepresenter()->GetReference();
+		m_ReferenceShapeMesh = m_Model->GetRepresenter()->GetReference();
 		m_UpdatedShapeMesh = km::cloneMesh<InputMeshType, InputMeshType>( inputMesh );
 		km::copyMeshToMeshGeometry<InputMeshType, InputMeshType>(inputMesh, m_UpdatedShapeMesh);
 		km::ComputeGeometry<TOutputMesh>(m_UpdatedShapeMesh, true);
 
 		km::g_liverCentroid.CastFrom(km::getMeshCentroid<InputMeshType>(m_UpdatedShapeMesh));
-
-		m_MeanShapeMesh = this->GetStatisticalModel()->DrawMean();
-		m_UpdatedMeanShapeMesh = km::cloneMesh<InputMeshType, InputMeshType>( m_MeanShapeMesh );
-		km::copyMeshToMeshGeometry<InputMeshType, InputMeshType>(inputMesh, m_UpdatedMeanShapeMesh);
-		km::ComputeGeometry<TOutputMesh>(m_UpdatedMeanShapeMesh, false);
 
 		//Initialize SSM utils.
 		this->m_SSMUtils.SetSSM(this->GetStatisticalModel());
@@ -182,6 +180,10 @@ namespace itk
 		this->m_ClassifierUtils.SetProfileExtractor(&m_ProfileExtractor);
 
 		this->m_Phase = Lv1;
+
+		m_Forces.resize(inputMesh->GetNumberOfPoints());
+
+		m_NumberOfShapeClusters = km::g_number_clusters;
 	}
 	
 	template< class TInputMesh, class TOutputMesh, class TInputImage, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
@@ -191,7 +193,7 @@ namespace itk
 	{
 		this->Initialize();
 
-		this->Cluster( 7 );
+		this->Cluster();
 
 		m_Step = 0;
 
@@ -232,34 +234,36 @@ namespace itk
 			VectorType displacement;
 			SimplexMeshGeometry *data;
 			unsigned int idx;
-			ClusterItem* clusterItem;
+			InputPointsContainer *nonConstPoints = const_cast< InputPointsContainer * >( this->GetInput(0)->GetPoints() );
 			GeometryMapType::Iterator dataIt = this->m_Data->Begin();
 			while ( dataIt != this->m_Data->End() )
 			{
 				idx = dataIt.Index();
 				data = dataIt.Value();
 
-				clusterItem = m_ClusterPool.GetClusterItemByPointId(idx);
 				PointType tmpPt;
 				this->m_ClassifierUtils.FindNextRegionPoint(tmpPt, data->pos, data, idx, 1.5);
-				displacement = tmpPt - data->pos;
-				clusterItem->force += dot_product(displacement.GetVnlVector(), data->normal.GetVnlVector());
-
+				m_Forces[idx] = dot_product((tmpPt-data->pos).GetVnlVector(), data->normal.GetVnlVector());
 				dataIt++;
 			}
 
-			this->m_ClusterPool.Update();
-
-			InputPointsContainer *nonConstPoints = const_cast< InputPointsContainer * >( this->GetInput(0)->GetPoints() );
 			dataIt = this->m_Data->Begin();
 			while ( dataIt != this->m_Data->End() )
 			{
 				idx = dataIt.Index();
 				data = dataIt.Value();
 
-				clusterItem = m_ClusterPool.GetClusterItemByPointId(idx);
-				displacement.SetVnlVector( data->normal.GetVnlVector() );
-				displacement *= clusterItem->force;
+				double force = m_Forces[idx];
+				NeighborSetIterator neighborSetIt = data->neighborSet->begin();
+				while(neighborSetIt != data->neighborSet->end())
+				{
+					int neighborIdx = *neighborSetIt;
+					force += m_Forces[neighborIdx];
+					neighborSetIt++;
+				}
+				force /= (data->neighborSet->size()+1);
+				displacement.SetVnlVector(data->normal.Get_vnl_vector()*force);
+				
 				data->pos += displacement;
 				nonConstPoints->InsertElement(idx, data->pos);
 
@@ -278,23 +282,18 @@ namespace itk
 			VectorType displacement;
 			SimplexMeshGeometry *data;
 			unsigned int idx;
-			ClusterItem* clusterItem;
 			typename GeometryMapType::Iterator dataIt = this->m_Data->Begin();
 			while ( dataIt != this->m_Data->End() )
 			{
 				idx = dataIt.Index();
 				data = dataIt.Value();
 
-				clusterItem = m_ClusterPool.GetClusterItemByPointId(idx);
 				std::vector<double> features;
 				this->m_ProfileExtractor.extractFeatureSet(features, this->m_LiverClassifier->profileCategory, data, data->pos);
 				double force = 2*this->m_LiverClassifier->classify(features, idx)-0.9;
-				clusterItem->force += force;
-
+				m_Forces[idx] = force;
 				dataIt++;
 			}
-
-			this->m_ClusterPool.Update();
 
 			dataIt = this->m_Data->Begin();
 			while ( dataIt != this->m_Data->End() )
@@ -323,25 +322,31 @@ namespace itk
 		DeformableSimplexMesh3DWithShapePriorFilter< TInputMesh, TOutputMesh, TInputImage, TStatisticalModel, TRigidTransform, TShapeTransform>
 		::ComputeExternalForce(SimplexMeshGeometry *data, unsigned int idx)
 	{
-		ClusterItem* clusterItem = m_ClusterPool.GetClusterItemByPointId(idx);
+		VectorType vec_for_classify;
+		double force = m_Forces[idx];
+		NeighborSetIterator neighborSetIt = data->neighborSet->begin();
+		while(neighborSetIt != data->neighborSet->end())
+		{
+			int neighborIdx = *neighborSetIt;
+			force += m_Forces[neighborIdx];
+			neighborSetIt++;
+		}
+		force /= (data->neighborSet->size()+1);
+		m_Forces[idx] = force;
+		vec_for_classify.SetVnlVector( data->normal.GetVnlVector() * force );
 
 		VectorType vec_for_curvature;
-		//vec_for_curvature.Fill(0);
-		//vec_for_curvature.SetVnlVector(data->normal.GetVnlVector());
-
-		VectorType vec_for_classify;
-		vec_for_classify.SetVnlVector(data->normal.GetVnlVector() * clusterItem->force);
-
-		SimplexMeshGeometry *data_shape = this->m_UpdatedShapeMesh->GetGeometryData()->GetElement(idx);
-		double phi_shape = data_shape->phi;
-		double phi_cur = data->phi;
-		double curvatureDiff = (180.0/(20.0*3.14))*(phi_cur - phi_shape); //20 degree as a threshold
-		if (curvatureDiff > 1.0){
-			curvatureDiff = 1.0;
-		}else if (curvatureDiff < -1.0){
-			curvatureDiff = -1.0;
-		}
-		vec_for_curvature.SetVnlVector( data->normal.GetVnlVector() * curvatureDiff );
+		vec_for_curvature.Fill(0);
+		//SimplexMeshGeometry *data_shape = this->m_UpdatedShapeMesh->GetGeometryData()->GetElement(idx);
+		//double phi_shape = data_shape->phi;
+		//double phi_cur = data->phi;
+		//double curvatureDiff = (180.0/(20.0*3.14))*(phi_cur - phi_shape); //20 degree as a threshold
+		//if (curvatureDiff > 1.0){
+		//	curvatureDiff = 1.0;
+		//}else if (curvatureDiff < -1.0){
+		//	curvatureDiff = -1.0;
+		//}
+		//vec_for_curvature.SetVnlVector( data->normal.GetVnlVector() * curvatureDiff );
 
 		data->externalForce = vec_for_classify * this->GetKappa() + vec_for_curvature * this->GetBeta();
 	}
@@ -352,7 +357,10 @@ namespace itk
 		::IntervenePre()
 	{
 		//Clear cluster force.
-		this->m_ClusterPool.CleanCache();
+		for (int i=0;i<m_Forces.size();i++)
+		{
+			m_Forces[i] = 0.0;
+		}
 	}
 
 	template< class TInputMesh, class TOutputMesh, class TInputImage, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
@@ -364,9 +372,15 @@ namespace itk
 		{
 			this->UpdateShape();
 
-			//km::writeMesh<InputMeshType>(km::g_output_dir, "internalDeformedMesh", m_Step, ".vtk", this->GetInput(0));
-			km::writeMesh<InputMeshType>(km::g_output_dir, "internalMeanMesh", m_Step, ".vtk", this->m_UpdatedMeanShapeMesh);
+			km::writeMesh<InputMeshType>(km::g_output_dir, "internalDeformedMesh", m_Step, ".vtk", this->GetInput(0));
 			km::writeMesh<InputMeshType>(km::g_output_dir, "internalShapeMesh", m_Step, ".vtk", this->m_UpdatedShapeMesh);
+
+			km::assigneMesh<InputMeshType>(m_UpdatedShapeMesh, 0);
+			for (int i=0;i<m_UpdatedShapeMesh->GetNumberOfPoints();i++)
+			{
+				m_UpdatedShapeMesh->SetPointData(i, m_SSMUtils.getShapeProbability(i));
+			}
+			km::writeMesh<InputMeshType>(km::g_output_dir, "internalP", m_Step, ".vtk", this->m_UpdatedShapeMesh);
 
 			//Copy updated shape points.
 			const InputMeshType *inputMesh = this->GetInput(0);
@@ -385,12 +399,12 @@ namespace itk
 
 			//Check shape updated difference.
 			double shapeParamDiff = this->m_SSMUtils.calShapeParaDiff();
-			if(shapeParamDiff < 0.02)
+			std::cout<<"Iteration "<<m_Step<<", shape difference: "<<shapeParamDiff<<std::endl;
+			if(shapeParamDiff < m_MinShapeDifference || m_Step >= m_IterationsLv1)
 			{
 				this->m_Phase = Lv2;
+				//m_Step = m_Iterations;
 			}
-
-			//this->m_ClassifierUtils.updateShapeNormals(this->m_ShapeMeshBeforeFitting, this->m_ShapeMesh);
 		}
 		else if (m_Phase == Lv2)
 		{
@@ -405,37 +419,10 @@ namespace itk
 	template< class TInputMesh, class TOutputMesh, class TInputImage, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	void
 		DeformableSimplexMesh3DWithShapePriorFilter< TInputMesh, TOutputMesh, TInputImage, TStatisticalModel, TRigidTransform, TShapeTransform>
-		::Cluster(int blockSize)
+		::Cluster()
 	{
-		this->m_ClusterPool.Reset();
-
-		std::cout<<"Start to cluster.."<<std::endl;
-		vtkSmartPointer<vtkPolyData> polydata = km::mesh2PolyData<InputMeshType>(this->m_UpdatedShapeMesh);
-		std::cout<<"Convert mesh to vtkpolydata done.."<<std::endl;
-		vtkSurface* surface=vtkSurface::New();
-		surface->CreateFromPolyData(polydata);
-		std::cout<<"Vtk surface create successfully."<<std::endl;
-
-		vtkIsotropicDiscreteRemeshing *remesh=vtkIsotropicDiscreteRemeshing::New();
-		remesh->SetInput(surface);
-		remesh->SetFileLoadSaveOption(0);
-		remesh->SetNumberOfClusters( polydata->GetNumberOfPoints()/blockSize );
-		remesh->SetConsoleOutput(2);
-		remesh->SetSubsamplingThreshold(10);
-		remesh->GetMetric()->SetGradation(2);
-		remesh->SetDisplay(0);
-		//remesh->Remesh();
-		std::cout<<"Now call ProcessClustering().."<<std::endl;
-		remesh->ProcessClustering();
-		std::cout<<"Number of clusters: "<<remesh->GetNumberOfClusters()<<std::endl;
-		this->m_UpdatedShapeMesh->GetPointData()->Reserve(m_UpdatedShapeMesh->GetNumberOfPoints());
-		for (int pointid = 0; pointid < remesh->GetNumberOfItems(); pointid++)
-		{
-			int clusterLabel = remesh->GetClustering()->GetValue(pointid);
-			this->m_ClusterPool.AddClusterMapping(pointid, clusterLabel);
-			this->m_UpdatedShapeMesh->SetPointData(pointid, clusterLabel);
-		}
-		km::writeMesh<InputMeshType>(km::g_output_dir, "clusteredMesh", blockSize, ".vtk", this->m_UpdatedShapeMesh);
+		std::cout<<"Start to cluster: "<<this->m_NumberOfShapeClusters<<std::endl;
+		this->m_SSMUtils.cluster(m_NumberOfShapeClusters);
 		std::cout<<"Clustering done."<<std::endl;
 	}
 
@@ -444,17 +431,11 @@ namespace itk
 		DeformableSimplexMesh3DWithShapePriorFilter< TInputMesh, TOutputMesh, TInputImage, TStatisticalModel, TRigidTransform, TShapeTransform>
 		::UpdateShape()
 	{
-		//Update shape
 		const InputMeshType *inputMesh = this->GetInput(0);
-		//this->m_SSMUtils.compositeTransformFitting(inputMesh);
-		this->m_SSMUtils.rigidTransformFitting(inputMesh);
-		this->m_SSMUtils.shapeTransformFitting(inputMesh);
 
-		km::transformMesh<InputMeshType, CompositeTransformType>(m_ReferenceShapeMesh, m_UpdatedShapeMesh, this->m_CompositeTransform);
+		//Rigid & shape fitting
+		this->m_SSMUtils.update(inputMesh, m_UpdatedShapeMesh);
 		km::ComputeGeometry<TOutputMesh>(m_UpdatedShapeMesh, true);
-
-		km::transformMesh<InputMeshType, RigidTransformType>(m_MeanShapeMesh, m_UpdatedMeanShapeMesh, this->m_RigidTransform);
-		km::ComputeGeometry<TOutputMesh>(m_UpdatedMeanShapeMesh, false);
 
 		km::g_liverCentroid.CastFrom(km::getMeshCentroid<InputMeshType>(m_UpdatedShapeMesh));
 		this->GetRigidTransform()->SetCenter(km::g_liverCentroid);

@@ -119,15 +119,17 @@ namespace itk
 		typedef typename InputImageType::Pointer      InputImagePointer;
 		typedef typename InputImageType::ConstPointer InputImageConstPointer;
 
-		typedef typename TStatisticalModel                StatisticalModelType;
-		typedef typename TRigidTransform                  RigidTransformType;
-		typedef typename RigidTransformType::Pointer      RigidTransformPointer;
-		typedef typename RigidTransformType::ConstPointer RigidTransformConstPointer;
-		typedef typename TShapeTransform                  ShapeTransformType;
-		typedef typename ShapeTransformType::Pointer      ShapeTransformPointer;
-		typedef typename ShapeTransformType::ConstPointer ShapeTransformConstPointer;
-		typedef CompositeTransform<double, Dimension>     CompositeTransformType;
-		typedef typename CompositeTransformType::Pointer  CompositeTransformPointer;
+		typedef typename TStatisticalModel                  StatisticalModelType;
+		typedef typename TRigidTransform                    RigidTransformType;
+		typedef typename RigidTransformType::ParametersType RigidTransformParametersType;
+		typedef typename RigidTransformType::Pointer        RigidTransformPointer;
+		typedef typename RigidTransformType::ConstPointer   RigidTransformConstPointer;
+		typedef typename TShapeTransform                    ShapeTransformType;
+		typedef typename ShapeTransformType::ParametersType ShapeTransformParametersType;
+		typedef typename ShapeTransformType::Pointer        ShapeTransformPointer;
+		typedef typename ShapeTransformType::ConstPointer   ShapeTransformConstPointer;
+		typedef CompositeTransform<double, Dimension>       CompositeTransformType;
+		typedef typename CompositeTransformType::Pointer    CompositeTransformPointer;
 
 		typedef km::ProfileExtractor<InputImageType> ProfileExtractorType;
 		typedef km::SSMUtils<InputMeshType, 
@@ -181,79 +183,6 @@ namespace itk
 			return this->m_UpdatedShapeMesh;
 		}
 
-		struct ClusterItem
-		{
-			//Attributes
-			int clusterLabel;
-			int clusterCount;
-			VectorType normal_force;
-			double force;
-			double distanceFromMean;
-		};
-
-		//This is for multiple points can share same one cluster item.
-		class ClusterPool
-		{
-		public:
-			void AddClusterMapping(int pointId, int clusterLabel)
-			{
-				ClusterItem* item = clustersSet[clusterLabel];
-				if (item == NULL){
-					item = new ClusterItem;
-					item->clusterLabel = clusterLabel;
-					item->clusterCount = 1;
-					item->normal_force.Fill(0);
-					item->force = 0.0;
-					item->distanceFromMean = 0.0;
-					clustersSet[clusterLabel] = item;
-				}else{
-					item->clusterCount++;
-				}
-				clustersMap[pointId] = item;
-			}
-
-			void CleanCache()
-			{
-				for (std::map<int, ClusterItem*>::iterator it=clustersSet.begin();it!=clustersSet.end();it++)
-				{
-					ClusterItem* item = it->second;
-					item->normal_force.Fill(0);
-					item->force = 0.0;
-					item->distanceFromMean = 0.0;
-				}
-			}
-
-			void Reset()
-			{
-				clustersSet.clear();
-			}
-
-			void Update()
-			{
-				for (std::map<int, ClusterItem*>::iterator it=clustersSet.begin();it!=clustersSet.end();it++)
-				{
-					ClusterItem* item = it->second;
-					item->normal_force /= item->clusterCount;
-					item->force /= item->clusterCount;
-					item->distanceFromMean /= item->clusterCount;
-				}
-			}
-
-			ClusterItem* GetClusterItemByPointId(int pointId)
-			{
-				ClusterItem* item = clustersMap[pointId];
-				if (item == NULL){
-					std::cerr<<"No cluster for point: "<<pointId<<std::endl;
-					ClusterItem * tmpItem = new ClusterItem;
-					return tmpItem;
-				}
-				return item;
-			}
-		private:
-			std::map<int, ClusterItem*> clustersSet; //<clusterLabel, clusterItem>
-			std::map<int, ClusterItem*> clustersMap; //<pointId, clusterItem>
-		};
-
 	protected:
 		DeformableSimplexMesh3DWithShapePriorFilter();
 		~DeformableSimplexMesh3DWithShapePriorFilter();
@@ -275,14 +204,15 @@ namespace itk
 
 		virtual void IntervenePost();
 
-		virtual void Cluster(int blockSize); //Curature cluster.
-
 		virtual void UpdateShape();
 
 		/**
 		* Compute the external force component
 		*/
 		virtual void ComputeExternalForce(SimplexMeshGeometry *data, unsigned int indx);
+
+		//cluster related APIs
+		virtual void Cluster();
 
 		/**
 		* scalar for balloon force
@@ -302,13 +232,16 @@ namespace itk
 		ClassifierUtilsType          m_ClassifierUtils;
 
 		InputMeshPointer             m_ReferenceShapeMesh;
-		InputMeshPointer             m_MeanShapeMesh;
-
 		InputMeshPointer             m_UpdatedShapeMesh;
-		InputMeshPointer             m_UpdatedMeanShapeMesh;
-		ClusterPool                  m_ClusterPool;
+
+		//cluster related
+		int                          m_NumberOfShapeClusters;
 
 		Phase                        m_Phase;
+		std::vector<double>          m_Forces;
+
+		double                       m_MinShapeDifference;
+		unsigned                     m_IterationsLv1;
 		
 	}; // end of class
 } // end namespace itk

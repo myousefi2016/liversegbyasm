@@ -18,7 +18,6 @@
 #include "itkMinimumDecisionRule.h"
 #include "itkSampleClassifierFilter.h"
 #include "itkKdTreeBasedKmeansEstimator.h"
-#include "itkVariableLengthVector.h"
 
 #include "statismo/CommonTypes.h"
 #include "statismo/HDF5Utils.h"
