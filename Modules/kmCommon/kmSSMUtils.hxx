@@ -8,11 +8,21 @@ namespace km
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	void
 	SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
-	::initialize()
+	::Initialize()
 	{
 		if (m_SSM == NULL){
 			std::cout<<"SSM cannot be null."<<std::endl;
 			return;
+		}
+
+		if (m_ReferenceShapeMesh.IsNull())
+		{
+			m_ReferenceShapeMesh = m_SSM->GetRepresenter()->GetReference();
+		}
+
+		if (m_MeanShapeMesh.IsNull())
+		{
+			m_MeanShapeMesh = m_SSM->DrawMean();
 		}
 
 		if (m_RigidTranform.IsNull()){
@@ -31,6 +41,16 @@ namespace km
 			m_UpdateShapeMesh = km::transformMesh<MeshType, ShapeTransformType>(m_ReferenceShapeMesh, m_ShapeTransform);
 		}
 
+		if (m_InputMesh.IsNull())
+		{
+			m_InputMesh = km::cloneMesh<MeshType, MeshType>(m_MeanShapeMesh);
+		}
+
+		if (m_OutputMesh.IsNull())
+		{
+			m_OutputMesh = km::cloneMesh<MeshType, MeshType>(m_MeanShapeMesh);
+		}
+
 		m_ShapeTransform->SetUsedNumberOfCoefficients(m_NumberOfCoefficients);
 		m_ShapeParametersPre = m_ShapeTransform->GetParameters();
 
@@ -44,29 +64,27 @@ namespace km
 		for (int i=0;i<m_SSM->GetNumberOfPrincipalComponents();i++){
 			m_ShapeVarianceWeights[i] = pcaVariance[i]/totalVariances;
 		}
+
+		this->Cluster(m_NumberOfClusters);
 	}
 	
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	void
 	SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
-	::update(const MeshType * targetMesh, MeshType * outputMesh)
+	::Update(const MeshType * targetMesh, MeshType * outputMesh)
 	{
-		if (m_Iterations == 0)
-		{
-			this->initialize();
-		}
+		km::copyMeshToMeshPoints<MeshType, MeshType>(targetMesh, m_InputMesh);
 
-		if (m_Iterations>=20)
-		{
-			this->getClusterByClusterId(4)->enabled = true;
-		}
+		this->RigidTransformFitting(m_InputMesh);
+		this->ShapeTransformFitting(m_InputMesh);
+		this->ClusteredShapeTransformFitting(m_InputMesh);
 
-		this->rigidTransformFitting(targetMesh);
-		this->shapeTransformFitting(targetMesh);
-		this->clusteredShapeTransformFitting(targetMesh);
-		this->updateShape(true);
-		
-		this->updateRigid(outputMesh, false);
+		this->UpdateClusters();
+
+		this->UpdateShape();
+		this->UpdateRigid();
+
+		km::copyMeshToMeshPoints<MeshType, MeshType>(m_OutputMesh, outputMesh);
 
 		m_Iterations++;
 	}
@@ -74,7 +92,7 @@ namespace km
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	void
 	SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
-	::printTransform()
+	::PrintTransform()
 	{
 		std::cout<<"rigid parameters: "<<m_RigidTranform->GetParameters()<<std::endl;
 		for(std::map<int, ShapeClusterItem*>::iterator it=m_ShapeClusterInstances.begin();it!=m_ShapeClusterInstances.end();it++)
@@ -88,7 +106,7 @@ namespace km
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	double
 	SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
-	::calShapeParaDiff()
+	::CalShapeParaDiff()
 	{
 		double shapeParamDiff = 0;
 		for(std::map<int, ShapeClusterItem*>::iterator it=m_ShapeClusterInstances.begin();it!=m_ShapeClusterInstances.end();it++)
@@ -111,21 +129,13 @@ namespace km
 	}
 
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
-	double
-	SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
-	::getShapeProbability(int pointId)
-	{
-		return m_ShapeClusterInstances[m_ShapeClusterMap[pointId]]->shapeProbability;
-	}
-
-	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	void
 	SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
-	::cluster(int numberOfClusters)
+	::Cluster(int numberOfClusters)
 	{
 		timer->StartTimer();
 
-		this->clearClusters();
+		this->ClearClusters();
 
 		int numberOfModesUsed = km::g_number_principle_components;//this->m_NumberOfCoefficients;
 		double multifier = 3.0;
@@ -180,7 +190,7 @@ namespace km
 		typedef TreeGeneratorType::KdTreeType TreeType;
 		typedef itk::Statistics::KdTreeBasedKmeansEstimator<TreeType> EstimatorType;
 		EstimatorType::Pointer estimator = EstimatorType::New();
-		EstimatorType::ParametersType initialMeans( measureLength * numberOfClusters );
+		EstimatorType::ParametersType initialMeans( measureLength * m_NumberOfClusters );
 		initialMeans.Fill( 1.0 );
 		estimator->SetParameters( initialMeans );
 		estimator->SetKdTree( treeGenerator->GetOutput() );
@@ -205,7 +215,7 @@ namespace km
 		ClassLabelVectorObjectType::Pointer classLabelsObject =
 			ClassLabelVectorObjectType::New();
 		ClassLabelVectorType& classLabelsVector = classLabelsObject->Get();
-		for (int k=0;k<numberOfClusters;k++)
+		for (int k=0;k<m_NumberOfClusters;k++)
 		{
 			classLabelsVector.push_back( k );
 		}
@@ -219,7 +229,7 @@ namespace km
 			membershipFunctionVectorObject->Get();
 
 		int index = 0;
-		for ( unsigned int i = 0 ; i < numberOfClusters ; i++ ){
+		for ( unsigned int i = 0 ; i < m_NumberOfClusters ; i++ ){
 			MembershipFunctionType::Pointer membershipFunction = MembershipFunctionType::New();
 			MembershipFunctionType::CentroidType centroid( sample->GetMeasurementVectorSize() );
 			for ( unsigned int j = 0 ; j < sample->GetMeasurementVectorSize(); j++ ){
@@ -238,25 +248,25 @@ namespace km
 		while(labelIt!=labelItEnd)
 		{
 			int clusterId = static_cast<int>(labelIt.GetClassLabel());
-			this->addCluster(pointId, clusterId);
+			this->AddCluster(pointId, clusterId);
 
 			++pointId;
 			++labelIt;
 		}
 
-		this->allocateClusters();
-
-		this->calculateClusterWeights();
-
-		std::cout<<"Actual cluster number: "<<this->m_ShapeClusterInstances.size()<<std::endl;
 		timer->StopTimer();
 		std::cout<<"Cluster done. "<<timer->GetElapsedTime() << " s." <<endl;
+		std::cout<<"Actual cluster number: "<<this->m_ShapeClusterInstances.size()<<std::endl;
+
+		this->AllocateClusters();
+
+		this->CalClusterWeights();
 	}
 	
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	void
 	SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
-	::rigidTransformFitting(const MeshType* targetMesh)
+	::RigidTransformFitting(const MeshType* targetMesh)
 	{
 		//timer->StartTimer();
 
@@ -289,7 +299,7 @@ namespace km
 		const StatismoMatrixType& WT = sourceMatrixForRigid.transpose();
 		StatismoMatrixType coeffsRigid = MInverseMatrix * (WT * targetMatrixForRigid);
 
-		updateRigidTransform(coeffsRigid.transpose(), this->m_RigidTranform);
+		UpdateRigidTransform(coeffsRigid.transpose(), this->m_RigidTranform);
 
 		//timer->StopTimer();
 		//std::cout<<"Rigid transform fitting done. "<<timer->GetElapsedTime() << " s." <<endl;
@@ -298,7 +308,7 @@ namespace km
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	void
 	SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
-	::clusteredRigidTransformFitting(const MeshType* targetMesh)
+	::ClusteredRigidTransformFitting(const MeshType* targetMesh)
 	{
 		//timer->StartTimer();
 
@@ -333,7 +343,7 @@ namespace km
 			StatismoMatrixType coeffsRigid = MInverseMatrix * (WT * clusterItem->targetMatrixForRigid);
 
 			clusterItem->rigidParamtersPre = clusterItem->rigidTransform->GetParameters();
-			updateRigidTransform(coeffsRigid.transpose(), clusterItem->rigidTransform);
+			UpdateRigidTransform(coeffsRigid.transpose(), clusterItem->rigidTransform);
 		}
 
 		//timer->StopTimer();
@@ -343,7 +353,7 @@ namespace km
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	void
 	SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
-	::shapeTransformFitting(const MeshType* targetMesh)
+	::ShapeTransformFitting(const MeshType* targetMesh)
 	{
 		//timer->StartTimer();
 
@@ -379,7 +389,7 @@ namespace km
 		StatismoVectorType coeffsShape = MInverseMatrix * (WT * (targetMatrixForShape-sourceMatrixForShape));
 
 		this->m_ShapeParametersPre = m_ShapeTransform->GetParameters();
-		updateShapeTransform(coeffsShape, m_ShapeTransform);
+		UpdateShapeTransform(coeffsShape, m_ShapeTransform);
 
 		//timer->StopTimer();
 		//std::cout<<"Shape transform fitting done. "<<timer->GetElapsedTime() << " s." <<endl;
@@ -388,7 +398,7 @@ namespace km
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	void
 	SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
-	::clusteredShapeTransformFitting(const MeshType* targetMesh)
+	::ClusteredShapeTransformFitting(const MeshType* targetMesh)
 	{
 		//timer->StartTimer();
 
@@ -401,7 +411,7 @@ namespace km
 		for(std::map<int, ShapeClusterItem*>::iterator it=m_ShapeClusterInstances.begin();it!=m_ShapeClusterInstances.end();it++)
 		{
 			ShapeClusterItem* clusterItem = it->second;
-			if (!clusterItem->enabled)
+			if (clusterItem->status != Relaxed)
 			{
 				clusterItem->shapeParametersPre = clusterItem->shapeTransform->GetParameters();
 				clusterItem->shapeTransform->SetParameters(m_ShapeTransform->GetParameters());
@@ -421,7 +431,7 @@ namespace km
 			}
 			StatismoVectorType coeffs = clusterItem->MInverseMatrix * (clusterItem->WT * (clusterItem->targetMatrixForShape-clusterItem->sourceMatrixForShape));
 			clusterItem->shapeParametersPre  = clusterItem->shapeTransform->GetParameters();
-			clusterItem->shapeProbability = this->updateShapeTransform(coeffs, clusterItem->shapeTransform);
+			this->UpdateShapeTransform(coeffs, clusterItem->shapeTransform);
 		}
 
 		//this->updateShape();
@@ -433,7 +443,7 @@ namespace km
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	void
 	SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
-	::updateRigidTransform(const StatismoMatrixType & mat, RigidTransformType* rigidTransform)
+	::UpdateRigidTransform(const StatismoMatrixType & mat, RigidTransformType* rigidTransform)
 	{
 		RigidTransformType::MatrixType rigidMatrix = rigidTransform->GetMatrix();
 		RigidTransformType::OffsetType rigidOffset = rigidTransform->GetOffset();
@@ -453,28 +463,22 @@ namespace km
 	}	
 	
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
-	double
+	void
 	SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
-	::updateShapeTransform(const StatismoVectorType & vec, ShapeTransformType* shapeTransform)
+	::UpdateShapeTransform(const StatismoVectorType & vec, ShapeTransformType* shapeTransform)
 	{
 		ShapeParametersType shapeParameters = shapeTransform->GetParameters();
-		double shapeProbability = 0.0;
-		bool abnormalFlag = false;
 		for (int i=0;i<m_NumberOfCoefficients;i++)
 		{
-			shapeProbability += km::Math::cdf_outside(vec[i])*m_ShapeVarianceWeights[i];
-			shapeParameters[i] = km::Math::setToBetween(vec[i], -2.5, 2.5);
-			//shapeProbability += km::Math::cdf_outside(shapeParameters[i])*m_ShapeVarianceWeights[i];
+			shapeParameters[i] = vec[i];
 		}
 		shapeTransform->SetParameters(shapeParameters);
-
-		return shapeProbability;
 	}
 	
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	void
 	SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
-	::addCluster(int pointId, int clusterId)
+	::AddCluster(int pointId, int clusterId)
 	{
 		this->m_ShapeClusterMap[pointId] = clusterId;
 		ShapeClusterItem* item = this->m_ShapeClusterInstances[clusterId];
@@ -490,7 +494,7 @@ namespace km
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	void
 	SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
-	::clearClusters()
+	::ClearClusters()
 	{
 		for(std::map<int, ShapeClusterItem*>::iterator it=m_ShapeClusterInstances.begin();it!=m_ShapeClusterInstances.end();it++)
 		{
@@ -505,7 +509,7 @@ namespace km
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	void
 	SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
-	::allocateClusters()
+	::AllocateClusters()
 	{
 		timer->StartTimer();
 
@@ -515,7 +519,7 @@ namespace km
 			ShapeClusterItem* item = it->second;
 			if (item!=NULL)
 			{
-				item->enabled = false;
+				item->status = Normal;
 				item->shapeTransform = ShapeTransformType::New();
 				item->shapeTransform->SetStatisticalModel( m_SSM );
 				item->shapeTransform->SetUsedNumberOfCoefficients( m_NumberOfCoefficients );
@@ -575,11 +579,32 @@ namespace km
 		std::cout<<"Allocate clusters done. "<<timer->GetElapsedTime() << " s." <<endl;
 		km::writeMesh<MeshType>("ClusterLabels.vtk", m_MeanShapeMesh);
 	}
+
+	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
+	void
+		SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
+		::UpdateClusters()
+	{
+		for(std::map<int, ShapeClusterItem*>::iterator it=m_ShapeClusterInstances.begin();it!=m_ShapeClusterInstances.end();it++)
+		{
+			ShapeClusterItem* item = it->second;
+			ShapeParametersType shapeParameters = item->shapeTransform->GetParameters();
+			item->shapeProbability = 0;
+			for (int p=0;p<m_NumberOfCoefficients;p++)
+			{
+				item->shapeProbability += km::Math::cdf_outside(shapeParameters[p])*m_ShapeVarianceWeights[p];
+				shapeParameters[p] = km::Math::setToBetween(shapeParameters[p], -2.5, 2.5);
+			}
+			item->shapeTransform->SetParameters(shapeParameters);
+
+			std::cout<<"cluster Id "<<item->clusterId<<", shape probability "<<item->shapeProbability<<std::endl;
+		}
+	}
 	
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	void
 	SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
-	::calculateClusterWeights()
+	::CalClusterWeights()
 	{
 		timer->StartTimer();
 
@@ -623,73 +648,44 @@ namespace km
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	void
 	SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
-	::updateShape(bool clustered)
+	::UpdateShape()
 	{
-		if (!clustered)
-		{
-			km::transformMesh<MeshType, ShapeTransformType>(m_ReferenceShapeMesh, m_UpdateShapeMesh, m_ShapeTransform);
-		}
-		else
-		{
-			ShapeTransformType::Pointer clusteredShapeTransform = ShapeTransformType::New();
-			clusteredShapeTransform->SetStatisticalModel(m_SSM);
-			clusteredShapeTransform->SetUsedNumberOfCoefficients(m_NumberOfCoefficients);
-			clusteredShapeTransform->SetIdentity();
+		//Store updated shape mesh into m_UpdateShapeMesh.
+		ShapeTransformType::Pointer clusteredShapeTransform = ShapeTransformType::New();
+		clusteredShapeTransform->SetStatisticalModel(m_SSM);
+		clusteredShapeTransform->SetUsedNumberOfCoefficients(m_NumberOfCoefficients);
+		clusteredShapeTransform->SetIdentity();
 
-			//ShapeParametersType shapeParameters = m_ShapeTransform->GetParameters();
+		//ShapeParametersType shapeParameters = m_ShapeTransform->GetParameters();
 
-			ShapeParametersType clusteredShapeParameters = clusteredShapeTransform->GetParameters();
-			for (int id=0;id<m_ReferenceShapeMesh->GetNumberOfPoints();id++)
+		ShapeParametersType clusteredShapeParameters = clusteredShapeTransform->GetParameters();
+		for (int id=0;id<m_ReferenceShapeMesh->GetNumberOfPoints();id++)
+		{
+			clusteredShapeParameters.Fill(0.0);
+			for(std::map<int, ShapeClusterItem*>::iterator it=m_ShapeClusterInstances.begin();it!=m_ShapeClusterInstances.end();it++)
 			{
-				clusteredShapeParameters.Fill(0.0);
-				for(std::map<int, ShapeClusterItem*>::iterator it=m_ShapeClusterInstances.begin();it!=m_ShapeClusterInstances.end();it++)
+				int clusterId = it->first;
+				ShapeClusterItem* item = it->second;
+				const ShapeParametersType & shapeParam = item->shapeTransform->GetParameters();
+				for (int p=0;p<clusteredShapeTransform->GetUsedNumberOfCoefficients();p++)
 				{
-					int clusterId = it->first;
-					ShapeClusterItem* item = it->second;
-					const ShapeParametersType & shapeParam = item->shapeTransform->GetParameters();
-					for (int p=0;p<clusteredShapeTransform->GetUsedNumberOfCoefficients();p++)
-					{
-						clusteredShapeParameters[p] += shapeParam[p]*m_ClusterWeights(id, clusterId);
-					}
+					clusteredShapeParameters[p] += shapeParam[p]*m_ClusterWeights(id, clusterId);
 				}
-				clusteredShapeTransform->SetParameters(clusteredShapeParameters);
-				m_UpdateShapeMesh->SetPoint(id, clusteredShapeTransform->TransformPoint(m_ReferenceShapeMesh->GetPoint(id)));
 			}
+			clusteredShapeTransform->SetParameters(clusteredShapeParameters);
+			m_UpdateShapeMesh->SetPoint(id, clusteredShapeTransform->TransformPoint(m_ReferenceShapeMesh->GetPoint(id)));
 		}
 	}
 	
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	void
 	SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
-	::updateRigid(MeshType * outputMesh, bool clustered)
+	::UpdateRigid()
 	{
-		if (!clustered)
+		//Store updated rigid mesh into m_OutputMesh.
+		for (int id=0;id<m_UpdateShapeMesh->GetNumberOfPoints();id++)
 		{
-			km::transformMesh<MeshType, RigidTransformType>(m_UpdateShapeMesh, outputMesh, m_RigidTranform);
-		}
-		else
-		{
-			RigidTransformType::Pointer clusteredRigidTransform = RigidTransformType::New();
-			clusteredRigidTransform->SetFixedParameters(m_RigidTranform->GetFixedParameters());
-			clusteredRigidTransform->SetIdentity();
-
-			RigidParametersType clusteredRigidParameters = clusteredRigidTransform->GetParameters();
-			for (int id=0;id<m_ReferenceShapeMesh->GetNumberOfPoints();id++)
-			{
-				clusteredRigidParameters.Fill(0.0);
-				for(std::map<int, ShapeClusterItem*>::iterator it=m_ShapeClusterInstances.begin();it!=m_ShapeClusterInstances.end();it++)
-				{
-					int clusterId = it->first;
-					ShapeClusterItem* item = it->second;
-					const ShapeParametersType & rigidParam = item->rigidTransform->GetParameters();
-					for (int p=0;p<m_RigidTranform->GetNumberOfParameters();p++)
-					{
-						clusteredRigidParameters[p] += rigidParam[p]*m_ClusterWeights(id, clusterId);
-					}
-				}
-				clusteredRigidTransform->SetParameters(clusteredRigidParameters);
-				outputMesh->SetPoint(id, clusteredRigidTransform->TransformPoint(m_UpdateShapeMesh->GetPoint(id)));
-			}
+			m_OutputMesh->SetPoint(id, m_RigidTranform->TransformPoint(m_UpdateShapeMesh->GetPoint(id)));
 		}
 	}
 }

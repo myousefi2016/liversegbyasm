@@ -47,8 +47,8 @@ int main(int argc, char* argv[])
 	ssmUtils.SetSSM(model);
 	ssmUtils.SetRigidTransform(rigidTransform);
 	ssmUtils.SetShapeTransform(shapeTransform);
-
-	ssmUtils.cluster(km::g_number_clusters);
+	ssmUtils.SetNumberOfClusters(km::g_number_clusters);
+	ssmUtils.Initialize();
 
 	MeshType::Pointer targetMesh = km::readMesh<MeshType>(targetMeshFile);
 	MeshType::Pointer outputMesh = km::cloneMesh<MeshType, MeshType>(meanShape);
@@ -59,12 +59,12 @@ int main(int argc, char* argv[])
 	for (int i=0;i<1;i++)
 	{
 		std::cout<<"****************iter: "<<i<<"**************"<<std::endl;
-		ssmUtils.update(targetMesh, outputMesh);
+		ssmUtils.Update(targetMesh, outputMesh);
 		char filename[1024];
 		sprintf(filename, "fittedMesh-%d.vtk", i);
 		km::writeMesh<MeshType>(filename, outputMesh);
 
-		ssmUtils.printTransform();
+		ssmUtils.PrintTransform();
 	}
 
 	//km::assigneMesh<MeshType>(meanShape, 0);

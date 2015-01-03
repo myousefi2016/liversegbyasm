@@ -164,10 +164,14 @@ namespace itk
 
 		km::g_liverCentroid.CastFrom(km::getMeshCentroid<InputMeshType>(m_UpdatedShapeMesh));
 
+		m_NumberOfShapeClusters = km::g_number_clusters;
+
 		//Initialize SSM utils.
 		this->m_SSMUtils.SetSSM(this->GetStatisticalModel());
 		this->m_SSMUtils.SetRigidTransform(this->GetRigidTransform());
 		this->m_SSMUtils.SetShapeTransform(this->GetShapeTransform());
+		this->m_SSMUtils.SetNumberOfClusters(m_NumberOfShapeClusters);
+		this->m_SSMUtils.Initialize();
 
 		//Initialize transforms
 		this->GetRigidTransform()->SetCenter(km::g_liverCentroid);
@@ -182,8 +186,6 @@ namespace itk
 		this->m_Phase = Lv1;
 
 		m_Forces.resize(inputMesh->GetNumberOfPoints());
-
-		m_NumberOfShapeClusters = km::g_number_clusters;
 	}
 	
 	template< class TInputMesh, class TOutputMesh, class TInputImage, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
@@ -192,8 +194,6 @@ namespace itk
 		::GenerateData()
 	{
 		this->Initialize();
-
-		this->Cluster();
 
 		m_Step = 0;
 
@@ -391,7 +391,7 @@ namespace itk
 			}
 
 			//Check shape updated difference.
-			double shapeParamDiff = this->m_SSMUtils.calShapeParaDiff();
+			double shapeParamDiff = this->m_SSMUtils.CalShapeParaDiff();
 			std::cout<<"Iteration "<<m_Step<<", shape difference: "<<shapeParamDiff<<std::endl;
 			if(shapeParamDiff < m_MinShapeDifference || m_Step >= m_IterationsLv1)
 			{
@@ -412,22 +412,12 @@ namespace itk
 	template< class TInputMesh, class TOutputMesh, class TInputImage, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	void
 		DeformableSimplexMesh3DWithShapePriorFilter< TInputMesh, TOutputMesh, TInputImage, TStatisticalModel, TRigidTransform, TShapeTransform>
-		::Cluster()
-	{
-		std::cout<<"Start to cluster: "<<this->m_NumberOfShapeClusters<<std::endl;
-		this->m_SSMUtils.cluster(m_NumberOfShapeClusters);
-		std::cout<<"Clustering done."<<std::endl;
-	}
-
-	template< class TInputMesh, class TOutputMesh, class TInputImage, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
-	void
-		DeformableSimplexMesh3DWithShapePriorFilter< TInputMesh, TOutputMesh, TInputImage, TStatisticalModel, TRigidTransform, TShapeTransform>
 		::UpdateShape()
 	{
 		const InputMeshType *inputMesh = this->GetInput(0);
 
 		//Rigid & shape fitting
-		this->m_SSMUtils.update(inputMesh, m_UpdatedShapeMesh);
+		this->m_SSMUtils.Update(inputMesh, m_UpdatedShapeMesh);
 		km::ComputeGeometry<TOutputMesh>(m_UpdatedShapeMesh, true);
 
 		//km::g_liverCentroid.CastFrom(km::getMeshCentroid<InputMeshType>(m_UpdatedShapeMesh));

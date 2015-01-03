@@ -211,9 +211,6 @@ namespace itk
 		*/
 		virtual void ComputeExternalForce(SimplexMeshGeometry *data, unsigned int indx);
 
-		//cluster related APIs
-		virtual void Cluster();
-
 		/**
 		* scalar for balloon force
 		*/

@@ -2,6 +2,7 @@
 #include <string>
 
 #include "itkVector.h"
+#include "itkImage.h"
 
 int main(int argc, char* argv[])
 {
@@ -28,6 +29,13 @@ int main(int argc, char* argv[])
 	sprintf(str, "ABCD%sEFG", tmp);
 
 	std::cout<<str<<std::endl;
+
+	typedef itk::Image<int, 3> ImageType;
+	ImageType::Pointer img;
+	std::cout<<img.IsNull()<<std::endl;
+
+	img = NULL;
+	std::cout<<img.IsNull()<<std::endl;
 
 	system("pause");
 

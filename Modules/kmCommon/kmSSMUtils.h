@@ -22,6 +22,14 @@
 
 namespace km
 {
+	enum ClusterStatus
+	{
+		Normal = 0,
+		Relaxed,
+		Abnormal,
+		Leaking
+	};
+
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
 	class SSMUtils
 	{
@@ -46,7 +54,7 @@ namespace km
 			std::vector<int> pointIds;
 			PointType clusterCentroid;
 			double shapeProbability;
-			bool enabled;
+			ClusterStatus status;
 			StatismoVectorType sourceMatrixForShape, targetMatrixForShape;
 			StatismoMatrixType basisMatrix, MInverseMatrix, WT;
 			typename ShapeTransformType::Pointer shapeTransform;
@@ -67,7 +75,7 @@ namespace km
 				this->clusterId = id;
 				clusterCentroid.Fill(0.0);
 				shapeProbability = 0.0;
-				enabled = false;
+				status = Normal;
 
 				this->meanPoints = SampleType::New();
 				this->meanPoints->SetMeasurementVectorSize( 3 );
@@ -87,10 +95,9 @@ namespace km
 		
 		SSMUtils()
 		{
-			m_ReferenceShapeMesh = NULL;
-			m_MeanShapeMesh = NULL;
 			m_NumberOfCoefficients = 3;
 			m_Iterations = 0;
+			m_NumberOfClusters = 7;
 		}
 
 		~SSMUtils()
@@ -101,8 +108,6 @@ namespace km
 		void SetSSM(const StatisticalModelType* model)
 		{
 			m_SSM = const_cast<StatisticalModelType*>( model );
-			m_ReferenceShapeMesh = m_SSM->GetRepresenter()->GetReference();
-			m_MeanShapeMesh = m_SSM->DrawMean();
 		}
 		
 		void SetRigidTransform(RigidTransformType* rtfm)
@@ -119,20 +124,21 @@ namespace km
 			}
 			std::cout<<"Number Of Coefficients: "<<m_NumberOfCoefficients<<std::endl;
 		}
+
+		void SetNumberOfClusters(int numberOfClusters)
+		{
+			m_NumberOfClusters = numberOfClusters;
+		}
+
+		void Initialize();
 		
-		void initialize();
+		void Update(const MeshType * targetMesh, MeshType * outputMesh);
 		
-		void update(const MeshType * targetMesh, MeshType * outputMesh);
+		void PrintTransform();
 		
-		void printTransform();
+		double CalShapeParaDiff();
 		
-		double calShapeParaDiff();
-		
-		double getShapeProbability(int pointId);
-		
-		void cluster(int numberOfClusters);
-		
-		ShapeClusterItem* getClusterByClusterId(int clusterId)
+		ShapeClusterItem* GetClusterByClusterId(int clusterId)
 		{
 			ShapeClusterItem* clusterItem = m_ShapeClusterInstances[clusterId];
 			if (clusterItem==NULL){
@@ -143,10 +149,10 @@ namespace km
 			return clusterItem;
 		}
 		
-		ShapeClusterItem* getClusterByPointId(int pointId)
+		ShapeClusterItem* GetClusterByPointId(int pointId)
 		{
 			int clusterId = m_ShapeClusterMap[pointId];
-			return getClusterByClusterId(clusterId);
+			return GetClusterByClusterId(clusterId);
 		}
 	private:
 		vtkNew<vtkTimerLog> timer;
@@ -157,6 +163,8 @@ namespace km
 		typename MeshType::Pointer m_ReferenceShapeMesh;
 		typename MeshType::Pointer m_MeanShapeMesh;
 		typename MeshType::Pointer m_UpdateShapeMesh;
+		typename MeshType::Pointer m_InputMesh;
+		typename MeshType::Pointer m_OutputMesh;
 		std::map<int, int> m_ShapeClusterMap; //<pointId, clusterId>
 		std::map<int, ShapeClusterItem*> m_ShapeClusterInstances; //<clusterId, clusterItem>
 		StatismoMatrixType m_ClusterWeights; //row-col: pointId-clusterWeight
@@ -164,31 +172,35 @@ namespace km
 		int m_NumberOfCoefficients;
 		std::map<int, double> m_Confidences; //<pointId, shapeProbability>
 		unsigned m_Iterations;
+		int m_NumberOfClusters;
 
-		void rigidTransformFitting(const MeshType* targetMesh);
+		void Cluster(int numberOfClusters);
+
+		void RigidTransformFitting(const MeshType* targetMesh);
 		
-		void clusteredRigidTransformFitting(const MeshType* targetMesh);
+		void ClusteredRigidTransformFitting(const MeshType* targetMesh);
 		
-		void shapeTransformFitting(const MeshType* targetMesh);
+		void ShapeTransformFitting(const MeshType* targetMesh);
 		
-		void clusteredShapeTransformFitting(const MeshType* targetMesh);
+		void ClusteredShapeTransformFitting(const MeshType* targetMesh);
 		
-		void updateRigidTransform(const StatismoMatrixType & mat, RigidTransformType* rigidTransform);
+		void UpdateRigidTransform(const StatismoMatrixType & mat, RigidTransformType* rigidTransform);
 
-		//return shape probability
-		double updateShapeTransform(const StatismoVectorType & vec, ShapeTransformType* shapeTransform);
+		void UpdateShapeTransform(const StatismoVectorType & vec, ShapeTransformType* shapeTransform);
 
-		void addCluster(int pointId, int clusterId);
+		void AddCluster(int pointId, int clusterId);
 
-		void clearClusters();
+		void ClearClusters();
 
-		void allocateClusters();
+		void AllocateClusters();
 
-		void calculateClusterWeights();
+		void UpdateClusters();
 
-		void updateShape(bool clustered = true);
+		void CalClusterWeights();
 
-		void updateRigid(MeshType * outputMesh, bool clustered = true);
+		void UpdateShape();
+
+		void UpdateRigid();
 	};
 }
 
