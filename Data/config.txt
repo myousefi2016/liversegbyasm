@@ -8,7 +8,10 @@
 0
 
 #number_clusters
-1
+7
 
 #cluster_min_dist
-5.0
+3.0
+
+#number_principle_components
+17

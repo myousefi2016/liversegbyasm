@@ -375,13 +375,6 @@ namespace itk
 			km::writeMesh<InputMeshType>(km::g_output_dir, "internalDeformedMesh", m_Step, ".vtk", this->GetInput(0));
 			km::writeMesh<InputMeshType>(km::g_output_dir, "internalShapeMesh", m_Step, ".vtk", this->m_UpdatedShapeMesh);
 
-			km::assigneMesh<InputMeshType>(m_UpdatedShapeMesh, 0);
-			for (int i=0;i<m_UpdatedShapeMesh->GetNumberOfPoints();i++)
-			{
-				m_UpdatedShapeMesh->SetPointData(i, m_SSMUtils.getShapeProbability(i));
-			}
-			km::writeMesh<InputMeshType>(km::g_output_dir, "internalP", m_Step, ".vtk", this->m_UpdatedShapeMesh);
-
 			//Copy updated shape points.
 			const InputMeshType *inputMesh = this->GetInput(0);
 			InputPointsContainer *nonConstPoints = const_cast< InputPointsContainer * >( inputMesh->GetPoints() );
@@ -437,8 +430,8 @@ namespace itk
 		this->m_SSMUtils.update(inputMesh, m_UpdatedShapeMesh);
 		km::ComputeGeometry<TOutputMesh>(m_UpdatedShapeMesh, true);
 
-		km::g_liverCentroid.CastFrom(km::getMeshCentroid<InputMeshType>(m_UpdatedShapeMesh));
-		this->GetRigidTransform()->SetCenter(km::g_liverCentroid);
+		//km::g_liverCentroid.CastFrom(km::getMeshCentroid<InputMeshType>(m_UpdatedShapeMesh));
+		//this->GetRigidTransform()->SetCenter(km::g_liverCentroid);
 	}
 
 }/* end namespace itk. */

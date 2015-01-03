@@ -103,6 +103,7 @@ namespace km
 	static char   g_output_dir[1024];
 	static int    g_number_clusters = 5;
 	static double g_cluster_min_dist = 5.0;
+	static int    g_number_principle_components = 17;
 
 	class Config
 	{
@@ -132,6 +133,9 @@ namespace km
 						}else if (line == "#cluster_min_dist"){
 							getline (myfile,line);
 							g_cluster_min_dist = atof( line.c_str() );
+						}else if (line == "#number_principle_components"){
+							getline (myfile,line);
+							g_number_principle_components = atoi( line.c_str() );
 						}
 					}
 					myfile.close();
