@@ -27,7 +27,8 @@ namespace km
 		Normal = 0,
 		Relaxed,
 		Abnormal,
-		Leaking
+		Leaking,
+		Optimized
 	};
 
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
@@ -55,6 +56,7 @@ namespace km
 			PointType clusterCentroid;
 			double shapeProbability;
 			ClusterStatus status;
+			double meanError;
 			StatismoVectorType sourceMatrixForShape, targetMatrixForShape;
 			StatismoMatrixType basisMatrix, MInverseMatrix, WT;
 			typename ShapeTransformType::Pointer shapeTransform;
@@ -76,6 +78,7 @@ namespace km
 				clusterCentroid.Fill(0.0);
 				shapeProbability = 0.0;
 				status = Normal;
+				meanError = 0.0;
 
 				this->meanPoints = SampleType::New();
 				this->meanPoints->SetMeasurementVectorSize( 3 );
@@ -97,7 +100,7 @@ namespace km
 		{
 			m_NumberOfCoefficients = 3;
 			m_Iterations = 0;
-			m_NumberOfClusters = 7;
+			m_NumberOfClusters = 1;
 		}
 
 		~SSMUtils()
@@ -137,6 +140,8 @@ namespace km
 		void PrintTransform();
 		
 		double CalShapeParaDiff();
+
+		double CalShapeParaProbability(const ShapeParametersType& shapeParameters);
 		
 		ShapeClusterItem* GetClusterByClusterId(int clusterId)
 		{

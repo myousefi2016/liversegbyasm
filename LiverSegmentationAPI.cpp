@@ -446,11 +446,11 @@ namespace km
 																	 RigidTransformType,
 																	 ShapeTransformType> DeformableFilterType;
 			DeformableFilterType::Pointer deformaFilter = DeformableFilterType::New();
-			deformaFilter->SetAlpha(0.3);
-			deformaFilter->SetKappa(0.3);
-			deformaFilter->SetBeta(0.1);
-			deformaFilter->SetGamma(0.2);
-			deformaFilter->SetRigidity(1);
+			deformaFilter->SetAlpha(km::g_alpha);
+			deformaFilter->SetKappa(km::g_kappa);
+			deformaFilter->SetBeta(km::g_beta);
+			deformaFilter->SetGamma(km::g_gamma);
+			deformaFilter->SetRigidity(km::g_rigidity);
 			deformaFilter->SetIterations(100);
 			deformaFilter->SetInput(deformedMesh);
 			deformaFilter->SetInputImage(inputImage);

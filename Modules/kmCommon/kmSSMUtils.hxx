@@ -75,14 +75,17 @@ namespace km
 	{
 		km::copyMeshToMeshPoints<MeshType, MeshType>(targetMesh, m_InputMesh);
 
-		this->RigidTransformFitting(m_InputMesh);
-		this->ShapeTransformFitting(m_InputMesh);
-		this->ClusteredShapeTransformFitting(m_InputMesh);
-
-		this->UpdateClusters();
+		for (int i=0;i<5;i++)
+		{
+			this->RigidTransformFitting(m_InputMesh);
+			this->ShapeTransformFitting(m_InputMesh);
+			this->ClusteredShapeTransformFitting(m_InputMesh);
+		}
 
 		this->UpdateShape();
 		this->UpdateRigid();
+
+		this->UpdateClusters();
 
 		km::copyMeshToMeshPoints<MeshType, MeshType>(m_OutputMesh, outputMesh);
 
@@ -126,6 +129,19 @@ namespace km
 		
 		shapeParamDiff /= m_ShapeClusterInstances.size();
 		return shapeParamDiff;
+	}
+
+	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
+	double
+		SSMUtils< TMesh, TStatisticalModel, TRigidTransform, TShapeTransform>
+		::CalShapeParaProbability(const ShapeParametersType& shapeParameters)
+	{
+		double p = 0.0;
+		for (int p=0;p<m_NumberOfCoefficients;p++)
+		{
+			p += km::Math::cdf_outside(shapeParameters[p]);
+		}
+		return p;
 	}
 
 	template< class TMesh, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
@@ -411,27 +427,28 @@ namespace km
 		for(std::map<int, ShapeClusterItem*>::iterator it=m_ShapeClusterInstances.begin();it!=m_ShapeClusterInstances.end();it++)
 		{
 			ShapeClusterItem* clusterItem = it->second;
-			if (clusterItem->status != Relaxed)
-			{
-				clusterItem->shapeParametersPre = clusterItem->shapeTransform->GetParameters();
-				clusterItem->shapeTransform->SetParameters(m_ShapeTransform->GetParameters());
-				continue;
-			}
+			clusterItem->shapeParametersPre = clusterItem->shapeTransform->GetParameters();
 
-			for (int idx=0;idx<clusterItem->pointIds.size();idx++)
+			if(clusterItem->status == Relaxed)
 			{
-				int pointId = clusterItem->pointIds[idx];
-				PointType targetPt = targetMeshForShape->GetPoint(pointId);
-				PointType sourcePt = sourceMeshForShape->GetPoint(pointId);
-				for (int d=0;d<Dimension;d++)
+				for (int idx=0;idx<clusterItem->pointIds.size();idx++)
 				{
-					clusterItem->targetMatrixForShape[idx*Dimension+d] = targetPt[d];
-					clusterItem->sourceMatrixForShape[idx*Dimension+d] = sourcePt[d];
+					int pointId = clusterItem->pointIds[idx];
+					PointType targetPt = targetMeshForShape->GetPoint(pointId);
+					PointType sourcePt = sourceMeshForShape->GetPoint(pointId);
+					for (int d=0;d<Dimension;d++)
+					{
+						clusterItem->targetMatrixForShape[idx*Dimension+d] = targetPt[d];
+						clusterItem->sourceMatrixForShape[idx*Dimension+d] = sourcePt[d];
+					}
 				}
+				StatismoVectorType coeffs = clusterItem->MInverseMatrix * (clusterItem->WT * (clusterItem->targetMatrixForShape-clusterItem->sourceMatrixForShape));
+				this->UpdateShapeTransform(coeffs, clusterItem->shapeTransform);
 			}
-			StatismoVectorType coeffs = clusterItem->MInverseMatrix * (clusterItem->WT * (clusterItem->targetMatrixForShape-clusterItem->sourceMatrixForShape));
-			clusterItem->shapeParametersPre  = clusterItem->shapeTransform->GetParameters();
-			this->UpdateShapeTransform(coeffs, clusterItem->shapeTransform);
+			else
+			{
+				clusterItem->shapeTransform->SetParameters(m_ShapeTransform->GetParameters());
+			}
 		}
 
 		//this->updateShape();
@@ -470,7 +487,7 @@ namespace km
 		ShapeParametersType shapeParameters = shapeTransform->GetParameters();
 		for (int i=0;i<m_NumberOfCoefficients;i++)
 		{
-			shapeParameters[i] = vec[i];
+			shapeParameters[i] = km::Math::setToBetween(vec[i], -2.5, 2.5);
 		}
 		shapeTransform->SetParameters(shapeParameters);
 	}
@@ -588,16 +605,39 @@ namespace km
 		for(std::map<int, ShapeClusterItem*>::iterator it=m_ShapeClusterInstances.begin();it!=m_ShapeClusterInstances.end();it++)
 		{
 			ShapeClusterItem* item = it->second;
+
 			ShapeParametersType shapeParameters = item->shapeTransform->GetParameters();
 			item->shapeProbability = 0;
 			for (int p=0;p<m_NumberOfCoefficients;p++)
 			{
 				item->shapeProbability += km::Math::cdf_outside(shapeParameters[p])*m_ShapeVarianceWeights[p];
-				shapeParameters[p] = km::Math::setToBetween(shapeParameters[p], -2.5, 2.5);
 			}
-			item->shapeTransform->SetParameters(shapeParameters);
 
-			std::cout<<"cluster Id "<<item->clusterId<<", shape probability "<<item->shapeProbability<<std::endl;
+			double meanError = 0.0;
+			for (int i=0;i<item->pointIds.size();i++)
+			{
+				int pointId = item->pointIds[i];
+				PointType inputPt = m_InputMesh->GetPoint(pointId);
+				PointType outputPt = m_OutputMesh->GetPoint(pointId);
+				meanError += inputPt.EuclideanDistanceTo(outputPt);
+			}
+			meanError /= item->pointIds.size();
+
+			item->meanError = item->meanError*0.5+meanError*0.5;
+			if (true)
+			{
+				item->status = Relaxed;
+			}
+			else
+			{
+				item->status = Normal;
+			}
+
+			std::cout<<"cluster Id "<<item->clusterId;
+			std::cout<<", shape probability "<<item->shapeProbability;
+			std::cout<<", mean error: "<<item->meanError;
+			std::cout<<", status: "<<item->status;
+			std::cout<<std::endl;
 		}
 	}
 	

@@ -46,7 +46,7 @@ namespace itk
 		m_Kappa = 0.1;
 		m_NumberOfShapeClusters = 1;
 		m_MinShapeDifference = 0.000001;//0.08;
-		m_IterationsLv1 = 50;
+		m_IterationsLv1 = 5;
 	}
 
 	template< class TInputMesh, class TOutputMesh, class TInputImage, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
@@ -186,6 +186,8 @@ namespace itk
 		this->m_Phase = Lv1;
 
 		m_Forces.resize(inputMesh->GetNumberOfPoints());
+
+		//this->ComputeGeometry();
 	}
 	
 	template< class TInputMesh, class TOutputMesh, class TInputImage, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
@@ -244,6 +246,7 @@ namespace itk
 				PointType tmpPt;
 				this->m_ClassifierUtils.FindNextRegionPoint(tmpPt, data->pos, data, idx, 1.5);
 				m_Forces[idx] = dot_product((tmpPt-data->pos).GetVnlVector(), data->normal.GetVnlVector());
+
 				dataIt++;
 			}
 
@@ -337,16 +340,16 @@ namespace itk
 
 		VectorType vec_for_curvature;
 		vec_for_curvature.Fill(0);
-		//SimplexMeshGeometry *data_shape = this->m_UpdatedShapeMesh->GetGeometryData()->GetElement(idx);
-		//double phi_shape = data_shape->phi;
-		//double phi_cur = data->phi;
-		//double curvatureDiff = (180.0/(20.0*3.14))*(phi_cur - phi_shape); //20 degree as a threshold
-		//if (curvatureDiff > 1.0){
-		//	curvatureDiff = 1.0;
-		//}else if (curvatureDiff < -1.0){
-		//	curvatureDiff = -1.0;
-		//}
-		//vec_for_curvature.SetVnlVector( data->normal.GetVnlVector() * curvatureDiff );
+		SimplexMeshGeometry *data_shape = this->m_UpdatedShapeMesh->GetGeometryData()->GetElement(idx);
+		double phi_shape = data_shape->phi;
+		double phi_cur = data->phi;
+		double curvatureDiff = (180.0/(20.0*3.14))*(phi_cur - phi_shape); //20 degree as a threshold
+		if (curvatureDiff > 1.0){
+			curvatureDiff = 1.0;
+		}else if (curvatureDiff < -1.0){
+			curvatureDiff = -1.0;
+		}
+		vec_for_curvature.SetVnlVector( data->normal.GetVnlVector() * curvatureDiff );
 
 		data->externalForce = vec_for_classify * this->GetKappa() + vec_for_curvature * this->GetBeta();
 	}
@@ -370,43 +373,44 @@ namespace itk
 	{
 		if (m_Phase == Lv1)
 		{
-			this->UpdateShape();
-
-			km::writeMesh<InputMeshType>(km::g_output_dir, "internalDeformedMesh", m_Step, ".vtk", this->GetInput(0));
-			km::writeMesh<InputMeshType>(km::g_output_dir, "internalShapeMesh", m_Step, ".vtk", this->m_UpdatedShapeMesh);
-
-			//Copy updated shape points.
-			const InputMeshType *inputMesh = this->GetInput(0);
-			InputPointsContainer *nonConstPoints = const_cast< InputPointsContainer * >( inputMesh->GetPoints() );
-			typename GeometryMapType::Iterator dataIt = this->m_Data->Begin();
-			SimplexMeshGeometry *data;
-			unsigned int idx;
-			while ( dataIt != this->m_Data->End() )
+			//Update shape
+			if (true)
 			{
-				idx = dataIt.Index();
-				data = dataIt.Value();
-				data->pos = this->m_UpdatedShapeMesh->GetPoint(idx);
-				nonConstPoints->InsertElement(idx, data->pos);
-				dataIt++;
-			}
+				this->UpdateShape();
 
-			//Check shape updated difference.
-			double shapeParamDiff = this->m_SSMUtils.CalShapeParaDiff();
-			std::cout<<"Iteration "<<m_Step<<", shape difference: "<<shapeParamDiff<<std::endl;
-			if(shapeParamDiff < m_MinShapeDifference || m_Step >= m_IterationsLv1)
-			{
-				this->m_Phase = Lv2;
-				//m_Step = m_Iterations;
+				//Copy updated shape points.
+				const InputMeshType *inputMesh = this->GetInput(0);
+				InputPointsContainer *nonConstPoints = const_cast< InputPointsContainer * >( inputMesh->GetPoints() );
+				typename GeometryMapType::Iterator dataIt = this->m_Data->Begin();
+				SimplexMeshGeometry *data;
+				unsigned int idx;
+				while ( dataIt != this->m_Data->End() )
+				{
+					idx = dataIt.Index();
+					data = dataIt.Value();
+					data->pos = this->m_UpdatedShapeMesh->GetPoint(idx);
+					nonConstPoints->InsertElement(idx, data->pos);
+					dataIt++;
+				}
+
+				//Check shape updated difference.
+				//double shapeParamDiff = this->m_SSMUtils.CalShapeParaDiff();
+				//std::cout<<"Iteration "<<m_Step<<", shape difference: "<<shapeParamDiff<<std::endl;
+				if(m_Step >= m_IterationsLv1)
+				{
+					this->m_Phase = Lv2;
+					//m_Step = m_Iterations;
+				}
 			}
 		}
 		else if (m_Phase == Lv2)
 		{
 			//Update shape
-			if (this->GetStep()%10 == 0)
+			if (this->GetStep()%10 == 9)
 			{
 				this->UpdateShape();
 			}
-		}	
+		}
 	}
 
 	template< class TInputMesh, class TOutputMesh, class TInputImage, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
@@ -420,8 +424,8 @@ namespace itk
 		this->m_SSMUtils.Update(inputMesh, m_UpdatedShapeMesh);
 		km::ComputeGeometry<TOutputMesh>(m_UpdatedShapeMesh, true);
 
-		//km::g_liverCentroid.CastFrom(km::getMeshCentroid<InputMeshType>(m_UpdatedShapeMesh));
-		//this->GetRigidTransform()->SetCenter(km::g_liverCentroid);
+		km::writeMesh<InputMeshType>(km::g_output_dir, "internalDeformedMesh", m_Step, ".vtk", this->GetInput(0));
+		km::writeMesh<InputMeshType>(km::g_output_dir, "internalShapeMesh", m_Step, ".vtk", this->m_UpdatedShapeMesh);
 	}
 
 }/* end namespace itk. */

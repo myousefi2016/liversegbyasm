@@ -104,6 +104,11 @@ namespace km
 	static int    g_number_clusters = 5;
 	static double g_cluster_min_dist = 5.0;
 	static int    g_number_principle_components = 17;
+	static double g_alpha = 0.3;
+	static double g_beta  = 0.3;
+	static double g_kappa = 0.3;
+	static double g_gamma = 0.1;
+	static int    g_rigidity = 1;
 
 	class Config
 	{
@@ -136,6 +141,21 @@ namespace km
 						}else if (line == "#number_principle_components"){
 							getline (myfile,line);
 							g_number_principle_components = atoi( line.c_str() );
+						}else if (line == "#alpha"){
+							getline (myfile,line);
+							g_alpha = atof( line.c_str() );
+						}else if (line == "#beta"){
+							getline (myfile,line);
+							g_beta = atof( line.c_str() );
+						}else if (line == "#kappa"){
+							getline (myfile,line);
+							g_kappa = atof( line.c_str() );
+						}else if (line == "#gamma"){
+							getline (myfile,line);
+							g_gamma = atof( line.c_str() );
+						}else if (line == "#rigidity"){
+							getline (myfile,line);
+							g_rigidity = atoi( line.c_str() );
 						}
 					}
 					myfile.close();
