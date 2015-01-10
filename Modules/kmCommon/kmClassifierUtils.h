@@ -99,7 +99,7 @@ namespace km
 					best_offset = distToNextRegion;
 				}else{
 					PointType closestBoundaryPoint = mpoint;
-					bool foundBoundary = this->FindFirstBoundaryPoint(closestBoundaryPoint, mpoint, geodata, idx, -1.5);
+					bool foundBoundary = this->FindBestBoundaryPoint(closestBoundaryPoint, mpoint, geodata, idx, -1.5);
 
 					double distToBoundary = itk::NumericTraits<double>::max();
 					if (foundBoundary){
@@ -345,24 +345,36 @@ namespace km
 			VectorType normal;
 			normal.Set_vnl_vector(geodata->normal.Get_vnl_vector());
 
-			if (m_ShapeNormalMap.size()>0)
+			//if (m_ShapeNormalMap.size()>0)
+			//{
+			//	VectorType shapeNormal = m_ShapeNormalMap[pointId];
+			//	double dotproduct = dot_product(shapeNormal.GetVnlVector(), normal.GetVnlVector());
+			//	if (dotproduct>0){
+			//		shapeNormal.Normalize();
+			//		normal += shapeNormal;
+			//		normal.Normalize();
+			//	}else if (dotproduct<0){
+			//		shapeNormal.Normalize();
+			//		normal -= shapeNormal;
+			//		normal.Normalize();
+			//	}
+			//}
+
+			double firstDirection = 1.0;
 			{
-				VectorType shapeNormal = m_ShapeNormalMap[pointId];
-				double dotproduct = dot_product(shapeNormal.GetVnlVector(), normal.GetVnlVector());
-				if (dotproduct>0){
-					shapeNormal.Normalize();
-					normal += shapeNormal;
-					normal.Normalize();
-				}else if (dotproduct<0){
-					shapeNormal.Normalize();
-					normal -= shapeNormal;
-					normal.Normalize();
+				if (m_ProfileExtractor->isInsideBuffer(curPos))
+				{
+					std::vector<FLOATTYPE> feature;
+					m_ProfileExtractor->extractFeatureSet(feature, m_RegionClassifier->profileCategory, geodata, curPos);
+
+					double classifiedVal = m_RegionClassifier->classify(feature,pointId);
+
+					firstDirection = 2.0*classifiedVal - 1.0;
 				}
 			}
 
-			double firstDirection = 1.0;
 			unsigned int searchedPoints = 1;
-			double next_offset = 0;
+			double next_offset = firstDirection;
 			while(searchedPoints<=maxSearchPoints)
 			{
 				PointType pttest = curPos + normal*next_offset;
@@ -372,20 +384,22 @@ namespace km
 					std::vector<FLOATTYPE> feature;
 					m_ProfileExtractor->extractFeatureSet(feature, m_RegionClassifier->profileCategory, geodata, pttest);
 
-					tmpDirection = 2.0*m_RegionClassifier->classify(feature,pointId) - 1.0;
+					double classifiedVal = m_RegionClassifier->classify(feature,pointId);
+
+					tmpDirection = 2.0*classifiedVal - 1.0;
 				}
-				next_offset += tmpDirection * searchStep;
-				if (searchedPoints == 1){
-					firstDirection = tmpDirection>0?1.0:-1.0;
-				}else if (tmpDirection*firstDirection<0){
+
+				if (tmpDirection*firstDirection<0){
 					break;//Change direction. Break from here.
 				}
+
+				next_offset += tmpDirection * searchStep;
 				searchedPoints++;
 			}
 			pt = curPos + normal*next_offset;
 		}
 
-		bool FindFirstBoundaryPoint(PointType & pt, PointType & curPos, SimplexMeshGeometryType* geodata, int pointId, double searchStep)
+		bool FindBestBoundaryPoint(PointType & pt, PointType & curPos, SimplexMeshGeometryType* geodata, int pointId, double searchStep)
 		{
 			bool found = false;
 

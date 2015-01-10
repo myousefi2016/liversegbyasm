@@ -5,6 +5,8 @@
 #include <string>
 #include <fstream>
 
+using namespace std;
+
 namespace km
 {
 	class Math
@@ -56,6 +58,21 @@ namespace km
 				return upperBound;
 			else
 				return val;
+		}
+		
+		static void calculateMeanAndSigma(const std::vector<double> & list, double & mean, double & sigma)
+		{
+			mean = sigma = 0.0;
+			for(int i=0;i<list.size();i++)
+			{
+				mean += list[i];
+			}
+			mean /= list.size();
+			for(int i=0;i<list.size();i++)
+			{
+				sigma += std::pow(list[i]-mean, 2);
+			}
+			sigma = std::sqrt( sigma/list.size() );
 		}
 	};
 	

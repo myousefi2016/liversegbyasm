@@ -46,7 +46,7 @@ namespace itk
 		m_Kappa = 0.1;
 		m_NumberOfShapeClusters = 1;
 		m_MinShapeDifference = 0.000001;//0.08;
-		m_IterationsLv1 = 5;
+		m_IterationsLv1 = 10;
 	}
 
 	template< class TInputMesh, class TOutputMesh, class TInputImage, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
@@ -146,13 +146,13 @@ namespace itk
 		}
 
 		InputMeshType* nonconstInputMesh = const_cast< InputMeshType * >( inputMesh );
-		InputPointDataContainer* pointdata = nonconstInputMesh->GetPointData();
-		if (pointdata->Size() <= 0)
+		m_Pointdata = nonconstInputMesh->GetPointData();
+		if (m_Pointdata->Size() <= 0)
 		{
-			pointdata->Reserve( nonconstInputMesh->GetNumberOfPoints() );
+			m_Pointdata->Reserve( nonconstInputMesh->GetNumberOfPoints() );
 			for (int i=0;i<nonconstInputMesh->GetNumberOfPoints();i++)
 			{
-				nonconstInputMesh->SetPointData( i, 0.0 );	
+				m_Pointdata->SetElement( i, 0.0 );	
 			}
 		}
 
@@ -185,9 +185,10 @@ namespace itk
 
 		this->m_Phase = Lv1;
 
-		m_Forces.resize(inputMesh->GetNumberOfPoints());
-
-		//this->ComputeGeometry();
+		for (int i=0;i<this->GetInput(0)->GetNumberOfPoints();i++)
+		{
+			m_Forces[i] = 0.0;
+		}
 	}
 	
 	template< class TInputMesh, class TOutputMesh, class TInputImage, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
@@ -203,6 +204,8 @@ namespace itk
 		{
 			const float progress = static_cast< float >( m_Step )
 				/ static_cast< float >( m_Iterations );
+
+			std::cout<<".........."<<progress<<"........."<<std::endl;
 
 			this->UpdateProgress(progress);
 
@@ -247,16 +250,19 @@ namespace itk
 				this->m_ClassifierUtils.FindNextRegionPoint(tmpPt, data->pos, data, idx, 1.5);
 				m_Forces[idx] = dot_product((tmpPt-data->pos).GetVnlVector(), data->normal.GetVnlVector());
 
+				//m_Forces[idx] *= (1.0 - std::abs(m_Errors[idx])); 
+
 				dataIt++;
 			}
 
+			double smoothFactor = 0.2; //Indicate how much the external force for current landmark weights.
 			dataIt = this->m_Data->Begin();
 			while ( dataIt != this->m_Data->End() )
 			{
 				idx = dataIt.Index();
 				data = dataIt.Value();
 
-				double force = m_Forces[idx];
+				double force = 0;
 				NeighborSetIterator neighborSetIt = data->neighborSet->begin();
 				while(neighborSetIt != data->neighborSet->end())
 				{
@@ -264,8 +270,10 @@ namespace itk
 					force += m_Forces[neighborIdx];
 					neighborSetIt++;
 				}
-				force /= (data->neighborSet->size()+1);
-				displacement.SetVnlVector(data->normal.Get_vnl_vector()*force);
+				force = smoothFactor*m_Forces[idx]+(1.0-smoothFactor)*(force/data->neighborSet->size());
+				m_Forces[idx] = force;
+
+				displacement.SetVnlVector(data->normal.Get_vnl_vector()*m_Forces[idx]);
 				
 				data->pos += displacement;
 				nonConstPoints->InsertElement(idx, data->pos);
@@ -293,7 +301,18 @@ namespace itk
 
 				std::vector<double> features;
 				this->m_ProfileExtractor.extractFeatureSet(features, this->m_LiverClassifier->profileCategory, data, data->pos);
-				double force = 2*this->m_LiverClassifier->classify(features, idx)-0.9;
+				double force = 2*this->m_LiverClassifier->classify(features, idx)-1.0;
+
+				switch( m_SSMUtils.GetLandmarkStatus(idx) )
+				{
+				case Leaking:
+					force = 0;
+					break;
+				case Abnormal:
+					force = 0;
+					break;
+				}
+
 				m_Forces[idx] = force;
 				dataIt++;
 			}
@@ -360,7 +379,7 @@ namespace itk
 		::IntervenePre()
 	{
 		//Clear cluster force.
-		for (int i=0;i<m_Forces.size();i++)
+		for (int i=0;i<this->GetInput(0)->GetNumberOfPoints();i++)
 		{
 			m_Forces[i] = 0.0;
 		}
@@ -374,33 +393,39 @@ namespace itk
 		if (m_Phase == Lv1)
 		{
 			//Update shape
-			if (true)
+			this->UpdateShape();
+
+			this->UpdateLandmarkStatus();
+
+			for (int i=0;i<m_Pointdata->size();i++)
 			{
-				this->UpdateShape();
+				m_Pointdata->InsertElement(i, (int)m_SSMUtils.GetLandmarkStatus(i));
+			}
+			km::writeMesh<InputMeshType>(km::g_output_dir, "internalDeformedMesh", m_Step, ".vtk", this->GetInput(0));
+			km::writeMesh<InputMeshType>(km::g_output_dir, "internalShapeMesh", m_Step, ".vtk", this->m_UpdatedShapeMesh);
 
-				//Copy updated shape points.
-				const InputMeshType *inputMesh = this->GetInput(0);
-				InputPointsContainer *nonConstPoints = const_cast< InputPointsContainer * >( inputMesh->GetPoints() );
-				typename GeometryMapType::Iterator dataIt = this->m_Data->Begin();
-				SimplexMeshGeometry *data;
-				unsigned int idx;
-				while ( dataIt != this->m_Data->End() )
-				{
-					idx = dataIt.Index();
-					data = dataIt.Value();
-					data->pos = this->m_UpdatedShapeMesh->GetPoint(idx);
-					nonConstPoints->InsertElement(idx, data->pos);
-					dataIt++;
-				}
+			//Copy updated shape points.
+			const InputMeshType *inputMesh = this->GetInput(0);
+			InputPointsContainer *nonConstPoints = const_cast< InputPointsContainer * >( inputMesh->GetPoints() );
+			typename GeometryMapType::Iterator dataIt = this->m_Data->Begin();
+			SimplexMeshGeometry *data;
+			unsigned int idx;
+			while ( dataIt != this->m_Data->End() )
+			{
+				idx = dataIt.Index();
+				data = dataIt.Value();
+				data->pos = this->m_UpdatedShapeMesh->GetPoint(idx);
+				nonConstPoints->InsertElement(idx, data->pos);
+				dataIt++;
+			}
 
-				//Check shape updated difference.
-				//double shapeParamDiff = this->m_SSMUtils.CalShapeParaDiff();
-				//std::cout<<"Iteration "<<m_Step<<", shape difference: "<<shapeParamDiff<<std::endl;
-				if(m_Step >= m_IterationsLv1)
-				{
-					this->m_Phase = Lv2;
-					//m_Step = m_Iterations;
-				}
+			//Check shape updated difference.
+			//double shapeParamDiff = this->m_SSMUtils.CalShapeParaDiff();
+			//std::cout<<"Iteration "<<m_Step<<", shape difference: "<<shapeParamDiff<<std::endl;
+			if(m_Step >= m_IterationsLv1)
+			{
+				this->m_Phase = Lv2;
+				//m_Step = m_Iterations;
 			}
 		}
 		else if (m_Phase == Lv2)
@@ -409,6 +434,13 @@ namespace itk
 			if (this->GetStep()%10 == 9)
 			{
 				this->UpdateShape();
+
+				for (int i=0;i<m_Pointdata->size();i++)
+				{
+					m_Pointdata->InsertElement(i, (int)m_SSMUtils.GetLandmarkStatus(i));
+				}
+				km::writeMesh<InputMeshType>(km::g_output_dir, "internalDeformedMesh", m_Step, ".vtk", this->GetInput(0));
+				km::writeMesh<InputMeshType>(km::g_output_dir, "internalShapeMesh", m_Step, ".vtk", this->m_UpdatedShapeMesh);
 			}
 		}
 	}
@@ -423,11 +455,57 @@ namespace itk
 		//Rigid & shape fitting
 		this->m_SSMUtils.Update(inputMesh, m_UpdatedShapeMesh);
 		km::ComputeGeometry<TOutputMesh>(m_UpdatedShapeMesh, true);
-
-		km::writeMesh<InputMeshType>(km::g_output_dir, "internalDeformedMesh", m_Step, ".vtk", this->GetInput(0));
-		km::writeMesh<InputMeshType>(km::g_output_dir, "internalShapeMesh", m_Step, ".vtk", this->m_UpdatedShapeMesh);
 	}
 
+	template< class TInputMesh, class TOutputMesh, class TInputImage, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
+	void
+		DeformableSimplexMesh3DWithShapePriorFilter< TInputMesh, TOutputMesh, TInputImage, TStatisticalModel, TRigidTransform, TShapeTransform>
+		::UpdateLandmarkStatus()
+	{
+		if (!km::g_landmark_status_evalution)
+		{
+			return;
+		}
+
+		std::vector<double> fittedErrors;
+		//fittedErrors.reserve(this->GetInput(0)->GetNumberOfPoints());
+		fittedErrors.resize(this->GetInput(0)->GetNumberOfPoints());
+
+		int idx;
+		SimplexMeshGeometry *data;
+		GeometryMapType::Iterator dataIt = this->m_Data->Begin();
+		while ( dataIt != this->m_Data->End() )
+		{
+			idx = dataIt.Index();
+			data = dataIt.Value();
+
+			VectorType diffVector = this->GetInput(0)->GetPoint(idx) - m_UpdatedShapeMesh->GetPoint(idx);
+
+			fittedErrors[idx] = dot_product(diffVector.GetVnlVector(), data->normal.Get_vnl_vector());
+
+			dataIt++;
+		}
+
+		double meanFittedError = 0.0;
+		double sigmaFittedError = 0.0;
+		km::Math::calculateMeanAndSigma(fittedErrors, meanFittedError, sigmaFittedError);
+
+		dataIt = this->m_Data->Begin();
+		while ( dataIt != this->m_Data->End() )
+		{
+			idx = dataIt.Index();
+			if (fittedErrors[idx] > meanFittedError+2.5*sigmaFittedError){
+				m_SSMUtils.SetLandmarkStatus(idx, Leaking);
+			}else if(fittedErrors[idx] < meanFittedError-2.5*sigmaFittedError)
+			{
+				m_SSMUtils.SetLandmarkStatus(idx, Abnormal);
+			}else{
+				m_SSMUtils.SetLandmarkStatus(idx, Normal);
+			}
+
+			dataIt++;
+		}
+	}
 }/* end namespace itk. */
 
 #endif //__itkDeformableSimplexMesh3DWithShapePriorFilter_hxx

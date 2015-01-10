@@ -15,16 +15,6 @@
 #include <fstream>
 #include <string>
 
-static double SIGMA = 1.0; //采样梯度profile时，计算梯度场采样的参数sigma
-static int PROFILE_DIM = 9;
-static double PROFILE_SPACING = 1.5; //毫米 PROFILE_LENTH/(PROFILE_DIM-1)
-static double SHIFT_INSIDE = 3.0; //采样表面内profile时，样本从表面上向表面内偏移的距离
-static double SHIFT_OUTSIDE = 3.0; //采样表面外profile时，样本从表面上向表面外偏移的距离
-static double SHIFT_BOUNDARY = 1.0;
-static int NUMBER_OF_INSIDE_PER_POINT = 3; // 在每个MESH点附近采样inside profile的数量。
-static int NUMBER_OF_BOUNDARY_PER_POINT = 6; // 在每个MESH点附近采样boundary profile的数量。
-static int NUMBER_OF_OUTSIDE_PER_POINT = 9; // 在每个MESH点附近采样outside profile的数量。
-
 #define RESAMPLE_SPACING 2.0
 
 #ifndef B_CLASS_TYPE
@@ -92,11 +82,19 @@ namespace km
 		}
 	};
 
+	static double SIGMA = 1.0; //采样梯度profile时，计算梯度场采样的参数sigma
+	static int PROFILE_DIM = 9;
+	static double PROFILE_SPACING = 1.5; //毫米 PROFILE_LENTH/(PROFILE_DIM-1)
+	static double SHIFT_INSIDE = 3.0; //采样表面内profile时，样本从表面上向表面内偏移的距离
+	static double SHIFT_OUTSIDE = 3.0; //采样表面外profile时，样本从表面上向表面外偏移的距离
+	static double SHIFT_BOUNDARY = 1.0;
+	static int NUMBER_OF_INSIDE_PER_POINT = 3; // 在每个MESH点附近采样inside profile的数量。
+	static int NUMBER_OF_BOUNDARY_PER_POINT = 6; // 在每个MESH点附近采样boundary profile的数量。
+	static int NUMBER_OF_OUTSIDE_PER_POINT = 9; // 在每个MESH点附近采样outside profile的数量。
+
 	static PROCESS_PHASE g_phase;
 	static std::vector<std::pair<double, double>> g_liverThresholds;
 	static itk::Point<double> g_liverCentroid;
-	static std::map<int, double> g_varianceMap;
-	static std::map<int, double> g_fittingErrorMap;
 	static double g_shape_penalty = 0.0;
 	static double g_fitting_error_threshold = 0.6;
 	static bool   g_disable_abnormal = true;
@@ -109,6 +107,7 @@ namespace km
 	static double g_kappa = 0.3;
 	static double g_gamma = 0.1;
 	static int    g_rigidity = 1;
+	static bool   g_landmark_status_evalution = false;
 
 	class Config
 	{
@@ -156,6 +155,9 @@ namespace km
 						}else if (line == "#rigidity"){
 							getline (myfile,line);
 							g_rigidity = atoi( line.c_str() );
+						}else if (line == "#landmark_status_evalution"){
+							getline (myfile,line);
+							g_landmark_status_evalution = (bool)atoi( line.c_str() );
 						}
 					}
 					myfile.close();
@@ -166,10 +168,11 @@ namespace km
 				std::cerr<<"Unable to open configuration file: "<<filename<<std::endl;
 			}
 
-			std::cout<<"shape_penalty: "<<g_shape_penalty<<std::endl;
-			std::cout<<"fitting_error_threshold: "<<g_fitting_error_threshold<<std::endl;
-			std::cout<<"diable_abnormal: "<<g_disable_abnormal<<std::endl;
-			std::cout<<"number_clusters: "<<g_number_clusters<<std::endl;
+			std::cout<<"[Global Config] shape_penalty: "<<g_shape_penalty<<std::endl;
+			std::cout<<"[Global Config] fitting_error_threshold: "<<g_fitting_error_threshold<<std::endl;
+			std::cout<<"[Global Config] diable_abnormal: "<<g_disable_abnormal<<std::endl;
+			std::cout<<"[Global Config] number_clusters: "<<g_number_clusters<<std::endl;
+			std::cout<<"[Global Config] landmark_status_evalution: "<<g_landmark_status_evalution<<std::endl;
 		}
 	};
 }

@@ -22,7 +22,7 @@
 
 namespace km
 {
-	enum ClusterStatus
+	enum LandmarkStatus
 	{
 		Normal = 0,
 		Relaxed,
@@ -53,9 +53,7 @@ namespace km
 		public:
 			int clusterId;
 			std::vector<int> pointIds;
-			PointType clusterCentroid;
 			double shapeProbability;
-			ClusterStatus status;
 			double meanError;
 			StatismoVectorType sourceMatrixForShape, targetMatrixForShape;
 			StatismoMatrixType basisMatrix, MInverseMatrix, WT;
@@ -75,9 +73,7 @@ namespace km
 			ShapeClusterItem(int id)
 			{
 				this->clusterId = id;
-				clusterCentroid.Fill(0.0);
 				shapeProbability = 0.0;
-				status = Normal;
 				meanError = 0.0;
 
 				this->meanPoints = SampleType::New();
@@ -93,6 +89,11 @@ namespace km
 				kdTreeGenerator->GetOutput()->Search( pt, static_cast<unsigned>(1), neighbors );
 				PointType closestPt = kdTreeGenerator->GetOutput()->GetMeasurementVector( neighbors[0] );
 				return closestPt;
+			}
+
+			int getNumberOfPoints()
+			{
+				return pointIds.size();
 			}
 		};
 		
@@ -140,8 +141,6 @@ namespace km
 		void PrintTransform();
 		
 		double CalShapeParaDiff();
-
-		double CalShapeParaProbability(const ShapeParametersType& shapeParameters);
 		
 		ShapeClusterItem* GetClusterByClusterId(int clusterId)
 		{
@@ -159,6 +158,17 @@ namespace km
 			int clusterId = m_ShapeClusterMap[pointId];
 			return GetClusterByClusterId(clusterId);
 		}
+
+		void SetLandmarkStatus(int pointId, LandmarkStatus status)
+		{
+			m_LandmarkStatus[pointId] = status;
+		}
+
+		LandmarkStatus GetLandmarkStatus(int pointId)
+		{
+			return m_LandmarkStatus[pointId];
+		}
+
 	private:
 		vtkNew<vtkTimerLog> timer;
 		typename StatisticalModelType* m_SSM;
@@ -174,16 +184,14 @@ namespace km
 		std::map<int, ShapeClusterItem*> m_ShapeClusterInstances; //<clusterId, clusterItem>
 		StatismoMatrixType m_ClusterWeights; //row-col: pointId-clusterWeight
 		StatismoVectorType m_ShapeVarianceWeights;
-		int m_NumberOfCoefficients;
-		std::map<int, double> m_Confidences; //<pointId, shapeProbability>
+		unsigned m_NumberOfCoefficients;
+		std::map<int, LandmarkStatus> m_LandmarkStatus;
 		unsigned m_Iterations;
 		int m_NumberOfClusters;
 
 		void Cluster(int numberOfClusters);
 
 		void RigidTransformFitting(const MeshType* targetMesh);
-		
-		void ClusteredRigidTransformFitting(const MeshType* targetMesh);
 		
 		void ShapeTransformFitting(const MeshType* targetMesh);
 		
@@ -198,8 +206,6 @@ namespace km
 		void ClearClusters();
 
 		void AllocateClusters();
-
-		void UpdateClusters();
 
 		void CalClusterWeights();
 

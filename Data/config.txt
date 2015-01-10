@@ -1,6 +1,9 @@
 #shape_penalty
 0.2
 
+#landmark_status_evalution
+1
+
 #alpha
 0.3
 

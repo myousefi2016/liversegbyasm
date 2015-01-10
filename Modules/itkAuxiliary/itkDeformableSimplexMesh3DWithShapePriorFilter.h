@@ -49,6 +49,8 @@
 #include "statismo_ITK/itkStatisticalShapeModelTransform.h"
 #include "kmCommon.h"
 
+using namespace km;
+
 namespace itk
 {
 	/** \class DeformableSimplexMesh3DWithShapePriorFilter
@@ -66,7 +68,8 @@ namespace itk
 	enum Phase
 	{
 		Lv1,
-		Lv2
+		Lv2,
+		Lv3
 	};
 
 	template< class TInputMesh, class TOutputMesh, class TInputImage, class TStatisticalModel, class TRigidTransform, class TShapeTransform>
@@ -206,6 +209,8 @@ namespace itk
 
 		virtual void UpdateShape();
 
+		virtual void UpdateLandmarkStatus();
+
 		/**
 		* Compute the external force component
 		*/
@@ -215,6 +220,8 @@ namespace itk
 		* scalar for balloon force
 		*/
 		double m_Kappa;
+
+		InputPointDataContainer* m_Pointdata;
 		
 		const StatisticalModelType*  m_Model;
 		InputImageConstPointer       m_InputImage;
@@ -235,7 +242,7 @@ namespace itk
 		int                          m_NumberOfShapeClusters;
 
 		Phase                        m_Phase;
-		std::vector<double>          m_Forces;
+		std::map<int, double>        m_Forces;
 
 		double                       m_MinShapeDifference;
 		unsigned                     m_IterationsLv1;

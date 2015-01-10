@@ -127,7 +127,7 @@ namespace km
 			}else{
 				sprintf (adaboostFile, "AdaBoostResult_%d", clusterLabel);
 			}
-			//std::cout<<adaboostFile<<std::endl;
+			std::cout<<adaboostFile<<std::endl;
 			try{
 				AdaBoostTrain(&X[0],&Y[0],Y.size(),X.size()/Y.size(), 100, adaboostFile);
 				this->readTrainFile(adaboostFile, 100);
