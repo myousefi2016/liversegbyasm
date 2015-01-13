@@ -19,19 +19,23 @@ int main(int argc, char* argv[])
 {
 	if( argc < 5 )
 	{
-		std::cerr<<"Usage:   origDataList meshList referenceGeometry OutputDir"<<std::endl;
+		std::cerr<<"Usage:   origDataList meshList referenceGeometry configFile OutputDir"<<std::endl;
 		return EXIT_FAILURE;
 	}
 
 	const char* origlistfile = argv[1];
 	const char* meshlistfile  = argv[2];
 	const char* referencegeometry = argv[3];
-	const char* outputdir = argv[4];
+	const char* configfile = argv[4];
+	const char* outputdir = argv[5];
 
 	itk::TimeProbesCollectorBase chronometer;
 	itk::MemoryProbesCollectorBase memorymeter;
 	chronometer.Start( "appearancetraining" );
 	memorymeter.Start( "appearancetraining" );
+
+	KM_DEBUG_INFO("Load config file...");
+	km::Config::loadConfig(configfile);
 
 	//For liver tissue classification
 	int resultcode = km::trainAppearance(

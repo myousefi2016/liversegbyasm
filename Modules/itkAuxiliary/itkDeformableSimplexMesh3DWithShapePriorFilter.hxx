@@ -70,10 +70,7 @@ namespace itk
 		::Initialize()
 	{
 		//Check input.
-		if (this->GetInputImage() != NULL){
-			this->m_ProfileExtractor.setImage(this->GetInputImage());
-			this->m_ProfileExtractor.enableCache(false);
-		}else{
+		if (this->GetInputImage() == NULL){
 			std::cerr<<"Input image is NULL."<<std::endl;
 			return;
 		}
@@ -156,13 +153,17 @@ namespace itk
 			}
 		}
 
+		this->m_ProfileExtractor.setImage(this->GetInputImage());
+		this->m_ProfileExtractor.extractGlobalIntensityRange(nonconstInputMesh);
+		this->m_ProfileExtractor.enableCache(false);
+
 		//Initialize shape mesh
 		m_ReferenceShapeMesh = m_Model->GetRepresenter()->GetReference();
 		m_UpdatedShapeMesh = km::cloneMesh<InputMeshType, InputMeshType>( inputMesh );
 		km::copyMeshToMeshGeometry<InputMeshType, InputMeshType>(inputMesh, m_UpdatedShapeMesh);
 		km::ComputeGeometry<TOutputMesh>(m_UpdatedShapeMesh, true);
 
-		km::g_liverCentroid.CastFrom(km::getMeshCentroid<InputMeshType>(m_UpdatedShapeMesh));
+		PointType liverCentroid = km::getMeshCentroid<InputMeshType>(m_UpdatedShapeMesh);
 
 		m_NumberOfShapeClusters = km::g_number_clusters;
 
@@ -174,7 +175,7 @@ namespace itk
 		this->m_SSMUtils.Initialize();
 
 		//Initialize transforms
-		this->GetRigidTransform()->SetCenter(km::g_liverCentroid);
+		this->GetRigidTransform()->SetCenter(liverCentroid);
 		this->m_CompositeTransform = CompositeTransformType::New();
 		this->m_CompositeTransform->AddTransform( this->GetRigidTransform() );
 		this->m_CompositeTransform->AddTransform( this->GetShapeTransform() );
@@ -300,15 +301,12 @@ namespace itk
 				data = dataIt.Value();
 
 				std::vector<double> features;
-				this->m_ProfileExtractor.extractFeatureSet(features, this->m_LiverClassifier->profileCategory, data, data->pos);
+				this->m_ProfileExtractor.extractFeatureSet(features, this->m_LiverClassifier->profileCategory, data, data->pos, idx);
 				double force = 2*this->m_LiverClassifier->classify(features, idx)-1.0;
 
 				switch( m_SSMUtils.GetLandmarkStatus(idx) )
 				{
 				case Leaking:
-					force = 0;
-					break;
-				case Abnormal:
 					force = 0;
 					break;
 				}
@@ -425,7 +423,23 @@ namespace itk
 			if(m_Step >= m_IterationsLv1)
 			{
 				this->m_Phase = Lv2;
-				//m_Step = m_Iterations;
+				for (int i=0;i<this->GetInput(0)->GetNumberOfPoints();i++)
+				{
+					m_ProfileExtractor.extractLocalIntensityRange(this->GetInput(0), i);
+					//m_ProfileExtractor.getIntensityRange(i).Print();
+				}
+			}
+			else
+			{
+				for (int i=0;i<this->GetInput(0)->GetNumberOfPoints();i++)
+				{
+					//m_ProfileExtractor.extractLocalIntensityRange(this->GetInput(0), i);
+					if (m_SSMUtils.GetLandmarkStatus(i) == Abnormal)
+					{
+						m_ProfileExtractor.extractLocalIntensityRange(this->GetInput(0), i);
+						//m_ProfileExtractor.getIntensityRange(i).Print();
+					}
+				}
 			}
 		}
 		else if (m_Phase == Lv2)
@@ -435,7 +449,9 @@ namespace itk
 			{
 				this->UpdateShape();
 
-				for (int i=0;i<m_Pointdata->size();i++)
+				//this->UpdateLandmarkStatus();
+
+				for (int i=0;i<this->GetInput(0)->GetNumberOfPoints();i++)
 				{
 					m_Pointdata->InsertElement(i, (int)m_SSMUtils.GetLandmarkStatus(i));
 				}
@@ -489,6 +505,8 @@ namespace itk
 		double meanFittedError = 0.0;
 		double sigmaFittedError = 0.0;
 		km::Math::calculateMeanAndSigma(fittedErrors, meanFittedError, sigmaFittedError);
+
+		std::cout<<"mean: "<<meanFittedError<<", sigma: "<<sigmaFittedError<<std::endl;
 
 		dataIt = this->m_Data->Begin();
 		while ( dataIt != this->m_Data->End() )

@@ -134,13 +134,13 @@ namespace itk
 		typedef CompositeTransform<double, Dimension>       CompositeTransformType;
 		typedef typename CompositeTransformType::Pointer    CompositeTransformPointer;
 
-		typedef km::ProfileExtractor<InputImageType> ProfileExtractorType;
+		typedef km::ProfileExtractor<InputImageType, InputMeshType> ProfileExtractorType;
 		typedef km::SSMUtils<InputMeshType, 
 							 StatisticalModelType, 
 							 RigidTransformType, 
 							 ShapeTransformType>     SSMUtilsType;
 		typedef km::ProfileClassifier                ProfileClassifierType;
-		typedef km::ClassifierUtils<InputMeshType, ProfileExtractorType> ClassifierUtilsType;
+		typedef km::ClassifierUtils<ProfileExtractorType> ClassifierUtilsType;
 
 		itkSetMacro(Kappa, double);
 		itkGetConstMacro(Kappa, double);

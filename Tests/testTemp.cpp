@@ -1,41 +1,50 @@
 #include <iostream>
 #include <string>
+#include <map>
 
-#include "itkVector.h"
-#include "itkImage.h"
+#include "vtkTimerLog.h"
+#include "vtkNew.h"
+
+#include "kmUtility.h"
 
 int main(int argc, char* argv[])
 {
+	std::map<int, km::NormalDistribution> TempMap;
 
-	itk::Vector<double, 4> vec;
-	vec[0] = 1;
-	vec[1] = 20;
-	vec[2] = 200;
-	vec[3] = 300;
+	km::NormalDistribution shapeDistribution(0,1);
+	std::cout<<shapeDistribution.cdf(0)<<std::endl;
+	std::cout<<shapeDistribution.cdf_inside(2.5)<<std::endl;
+	//std::cout<<shapeDistribution.cdf_inside(0)<<std::endl;
+	//std::cout<<shapeDistribution.cdf_outside(0)<<std::endl;
+	//std::cout<<shapeDistribution.cdf_outside(3.0)<<std::endl;
 
-	vec[0] = 1.0/(vec[0]+1.0);
-	vec[1] = 1.0/(vec[1]+1.0);
-	vec[2] = 1.0/(vec[2]+1.0);
-	vec[3] = 1.0/(vec[3]+1.0);
+	//std::cout<<"---------------------Insert-----------------------"<<std::endl;
+	//int N = 10000000;
+	//for (int i=0;i<N;i++)
+	//{
+	//	TempMap[i] = Gauss;
+	//}
 
-	double sum = vec[0]+vec[1]+vec[2]+vec[3];
+	//std::cout<<"---------------------Calculate-----------------------"<<std::endl;
+	//vtkNew<vtkTimerLog> timer;
+	//timer->StartTimer();
+	//for (int i=0;i<N;i++)
+	//{
+	//	double pdfval = TempMap[i].cdf_outside(i);
+	//	//std::cout<<pdfval<<std::endl;
+	//}
+	//timer->StopTimer();
+	//std::cout<<"Calculate pdf done. "<<timer->GetElapsedTime() << " s." <<endl;
 
-	vec /= sum;
 
-	std::cout<<vec<<std::endl;
-
-	const char* tmp = NULL;
-	char str[1024];
-	sprintf(str, "ABCD%sEFG", tmp);
-
-	std::cout<<str<<std::endl;
-
-	typedef itk::Image<int, 3> ImageType;
-	ImageType::Pointer img;
-	std::cout<<img.IsNull()<<std::endl;
-
-	img = NULL;
-	std::cout<<img.IsNull()<<std::endl;
+	//timer->StartTimer();
+	//for (int i=0;i<10000;i++)
+	//{
+	//	double cdfoutsideval = TempMap[0].cdf_outside(30);
+	//	//std::cout<<cdfoutsideval<<std::endl;
+	//}
+	//timer->StopTimer();
+	//std::cout<<"Calculate cdf_outside done. "<<timer->GetElapsedTime() << " s." <<endl;
 
 	system("pause");
 

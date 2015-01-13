@@ -39,13 +39,11 @@ int main(int argc, char* argv[])
 	MeshType::Pointer inputMesh = km::readMesh<MeshType>( inputMeshFile ); //Input mesh
 	km::assigneMesh<MeshType>(inputMesh, 0.0);
 	km::loadSimplexMeshGeometryData<MeshType>(geoImage, inputMesh);
-	g_liverCentroid.CastFrom(km::getMeshCentroid<MeshType>(inputMesh)); //Liver centroid
-
-	km::detectLiverIntensityRangeWithoutTumor<InputImageType, MeshType>(inputImage, inputMesh, g_liverThresholds);
+	MeshType::PointType liverCentroid = km::getMeshCentroid<MeshType>(inputMesh); //Liver centroid
 	
 	typedef itk::AffineTransform<double, Dimension> RigidTransformType;
 	RigidTransformType::Pointer rigidTransform = RigidTransformType::New();
-	rigidTransform->SetCenter( g_liverCentroid );
+	rigidTransform->SetCenter( liverCentroid );
 	rigidTransform->SetIdentity(); //Rigid transform
 		
 	typedef itk::StatisticalShapeModelTransform<RepresenterType, double, Dimension> ShapeTransformType;

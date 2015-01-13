@@ -122,6 +122,7 @@ EuclideanDistanceMultipleValuePointMetric< TFixedPointSet, TMovingPointSet >
 	derivative.set_size( movingPointSet->GetNumberOfPoints(), m_Transform->GetNumberOfParameters()  );
 
 	double shapePenalty = 0.0;
+	km::NormalDistribution shapeDistribution(0, 1.0);
 	if (m_WeightForShapePenalty > 0)
 	{
 		double maxParam = 0.0;
@@ -133,7 +134,7 @@ EuclideanDistanceMultipleValuePointMetric< TFixedPointSet, TMovingPointSet >
 			}
 		}
 		//1e-6 is make sure the log take positive input.
-		shapePenalty =  -10.0*log( km::Math::cdf_outside(maxParam) + 1e-10 );
+		shapePenalty =  -10.0*log( shapeDistribution.cdf_outside(maxParam) + 1e-10 );
 	}
 
 	unsigned int identifier = 0;

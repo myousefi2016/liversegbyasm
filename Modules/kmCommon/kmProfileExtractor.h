@@ -6,6 +6,7 @@
 #include <memory>
 #include "itkMacro.h"
 #include "itkObject.h"
+#include "itkNumericTraits.h"
 #include "itkSimplexMeshGeometry.h"
 #include "itkImage.h"
 #include "itkCovariantVector.h"
@@ -21,11 +22,11 @@
 #include "vnl/vnl_matrix.h"
 #include "vnl/vnl_vector.h"
 
-#include "kmGlobal.h"
+#include "kmCommon.h"
 
 namespace km
 {
-	template<typename TImage>
+	template<typename TImage, typename TMesh>
 	class ProfileExtractor
 	{
 	public:
@@ -33,8 +34,11 @@ namespace km
 		typedef typename ImageType::PixelType                                               PixelType;
 		itkStaticConstMacro(ImageDimension, unsigned int, ImageType::ImageDimension);
 		typedef typename ImageType::IndexType                                               IndexType;
-		typedef typename ImageType::PointType                                               PointType;
+
+		typedef typename TMesh                                                              MeshType;
+		typedef typename MeshType::PointType                                                PointType;
 		typedef typename PointType::VectorType                                              VectorType;
+
 		typedef itk::Image<float, ImageDimension>                                           GradientImageType;
 		typedef typename itk::LinearInterpolateImageFunction<ImageType>                     LinearInterpolateImageFunctionType;
 		typedef typename itk::MedianImageFunction<ImageType>                                MedianImageFunctionType;
@@ -98,7 +102,7 @@ namespace km
 			typedef itk::GradientMagnitudeRecursiveGaussianImageFilter<ImageType, GradientImageType> GradientMagnitudeRecursiveGaussianImageFilterType;
 			GradientMagnitudeRecursiveGaussianImageFilterType::Pointer gradientMagFilter = GradientMagnitudeRecursiveGaussianImageFilterType::New();
 			gradientMagFilter->SetInput( inputImage );
-			gradientMagFilter->SetSigma( SIGMA );
+			gradientMagFilter->SetSigma( g_sigma );
 			gradientMagFilter->Update();
 
 			gradientFunc->SetInputImage(gradientMagFilter->GetOutput());
@@ -106,11 +110,12 @@ namespace km
 			//std::cout<<g_liverThresholds[0].first<<", "<<g_liverThresholds[0].second<<std::endl;
 		}
 
-		void extractFeatureSet( FeatureSetType & featureSet, PROFILE_CATEGORY profileCategory, const itk::SimplexMeshGeometry * geoData, const PointType & cur_pos )
+		void extractFeatureSet( FeatureSetType & featureSet, PROFILE_CATEGORY profileCategory, const itk::SimplexMeshGeometry * geoData, const PointType & cur_pos, int pointId = GLOBAL_POINT_ID )
 		{
 			featureSet.clear();
 			pointSet.clear();
 
+			this->localIntenDist = intensityDistributions[pointId];
 			this->currentPoint = cur_pos;
 			this->offsetVector = cur_pos - geoData->pos;
 			this->geoData = const_cast<itk::SimplexMeshGeometry*>(geoData);
@@ -125,7 +130,7 @@ namespace km
 			}
 
 			if (profileCategory==PLAIN){
-				this->addPoints(profileCategory, PROFILE_DIM, PROFILE_SPACING);
+				this->addPoints(profileCategory, g_profile_dim, g_profile_spacing);
 				this->extractIntensitySet(featureSet);
 			}else if (profileCategory==LIVER)
 			{
@@ -134,10 +139,11 @@ namespace km
 				}
 
 				if (featureSet.size() == 0){
-					this->addPoints(profileCategory, PROFILE_DIM, PROFILE_SPACING);
+					this->addPoints(profileCategory, g_profile_dim, g_profile_spacing);
+					this->extractBinaryIntensitySet(featureSet);
 					this->extractIntensityStatistics(featureSet);
-					this->extractGradientMoment(featureSet);
-					this->extractTangentFeatureSet(featureSet);
+					//this->extractGradientSet(featureSet);
+					this->extractGradientMoments(featureSet);
 					if (enableCacheFlag){
 						setCachedFeatures(featureSet, profileCategory, offset);
 					}
@@ -150,21 +156,187 @@ namespace km
 				}
 
 				if (featureSet.size() == 0){
-					this->addPoints(profileCategory, PROFILE_DIM, PROFILE_SPACING);
+					this->addPoints(profileCategory, g_profile_dim, g_profile_spacing);
+					this->extractBinaryIntensitySet(featureSet);
 					this->extractIntensityStatistics(featureSet);
-					this->extractGradientMoment(featureSet);
+					//this->extractGradientSet(featureSet);
+					this->extractGradientMoments(featureSet);
 					this->extractTangentFeatureSet(featureSet);
 					if (enableCacheFlag){
 						setCachedFeatures(featureSet, profileCategory, offset);
 					}
 				}
-			}
-			else if(profileCategory==COORDINATE){
-				this->extractCoordinate(featureSet);
 			}else{
 				std::cout<<"Unknown profile category: "<<ProfileCategoryUtils::category2string(profileCategory)<<std::endl;
 			}
 		}
+
+		void extractLocalIntensityRange(const MeshType* mesh)
+		{
+			for (int i=0;i<mesh->GetNumberOfPoints();i++)
+			{
+				this->extractLocalIntensityRange(mesh, i);
+			}
+		}
+
+		void extractLocalIntensityRange(const MeshType* mesh, int pointId)
+		{
+			std::vector<double> intensities;
+			double mu, sigma;
+			mu = sigma = 0.0;
+
+			int localRadius = 2;
+			MeshType::NeighborListType * localIndexList = mesh->GetNeighbors(pointId, localRadius);
+			localIndexList->push_back(pointId);
+
+			MeshType::NeighborListType::iterator localIt = localIndexList->begin();
+			while ( localIt != localIndexList->end() )
+			{
+				int tmpPointId = *localIt++;
+				const itk::SimplexMeshGeometry * tmpGeoData = mesh->GetGeometryData()->GetElement(tmpPointId);
+				if (tmpGeoData != NULL)
+				{
+					VectorType tmpNormal;
+					tmpNormal.Set_vnl_vector(tmpGeoData->normal.Get_vnl_vector());
+
+					PointType pos = mesh->GetPoint(tmpPointId);
+					int localDepth = 10;
+					for (int i=1;i<=localDepth;i++){
+						PointType samplePos = pos - tmpNormal*i;
+						double grayValue = 0;
+						if (this->linerInterpolatorFunc->IsInsideBuffer( samplePos )){
+							grayValue = this->linerInterpolatorFunc->Evaluate( samplePos );
+							grayValue = std::max(grayValue, 0.0);
+						}
+						intensities.push_back(grayValue);
+					}
+				}
+				else
+				{
+					std::cerr<<"[extractLocalIntensityRange] Cannot find geometry data for point: "<<pointId<<std::endl;
+				}	
+			}
+
+			km::Math::calculateMeanAndSigma(intensities, mu, sigma);
+
+			NormalDistribution newDistribution;
+			newDistribution.set_mu(mu);
+			newDistribution.set_sigma(sigma);
+			intensityDistributions[pointId] = newDistribution;
+		}
+
+		void extractGlobalIntensityRange(MeshType* mesh)
+		{
+			//std::vector<double> intensities;
+			//double mu, sigma;
+			//mu = sigma = 0.0;
+
+			////for (int pointId=0;pointId<mesh->GetNumberOfPoints();pointId++)
+			////{
+			////	const itk::SimplexMeshGeometry * tmpGeoData = mesh->GetGeometryData()->GetElement(pointId);
+			////	if (tmpGeoData != NULL)
+			////	{
+			////		VectorType tmpNormal;
+			////		tmpNormal.Set_vnl_vector(tmpGeoData->normal.Get_vnl_vector());
+
+			////		PointType pos = mesh->GetPoint(pointId);
+			////		int N = 10;
+			////		for (int i=1;i<=N;i++){
+			////			PointType samplePos = pos - tmpNormal*i;
+			////			double grayValue = 0;
+			////			if (this->linerInterpolatorFunc->IsInsideBuffer( samplePos )){
+			////				grayValue = this->linerInterpolatorFunc->Evaluate( samplePos );
+			////				grayValue = std::max(grayValue, 0.0);
+			////			}
+			////			intensities.push_back(grayValue);
+			////		}
+			////	}
+			////	else
+			////	{
+			////		std::cerr<<"[extractGlobalIntensityRange] Cannot find geometry data for point: "<<pointId<<std::endl;
+			////	}
+			////}
+
+			//MeshType::Pointer triangleMesh = km::simplexMeshToTriangleMesh<MeshType, MeshType>( mesh );
+			//typedef itk::Image<unsigned char, ImageType::ImageDimension> MaskImageType;
+			//MaskImageType::Pointer mask = km::generateBinaryFromMesh<MeshType, MaskImageType, ImageType>( triangleMesh, this->inputImage );
+			//itk::ImageRegionConstIterator<MaskImageType> it( mask, mask->GetLargestPossibleRegion() );
+			//it.GoToBegin();
+			//while(!it.IsAtEnd())
+			//{
+			//	unsigned char val = it.Get();
+			//	IndexType idx = it.GetIndex();
+
+			//	if (val == 1){
+			//		intensities.push_back(this->inputImage->GetPixel(idx));
+			//	}
+
+			//	it++;
+			//}
+
+			//km::Math::calculateMeanAndSigma(intensities, mu, sigma);
+
+			//NormalDistribution newDistribution;
+			//newDistribution.set_mu(mu);
+			//newDistribution.set_sigma(sigma);
+			//intensityDistributions[GLOBAL_POINT_ID] = newDistribution;
+			//newDistribution.print();
+
+			//globalIntenDist = newDistribution;
+
+			//for (int i=0;i<mesh->GetNumberOfPoints();i++)
+			//{
+			//	intensityDistributions[i] = newDistribution; //By default, all landmarks use global intensity threshold.
+			//}
+
+			double liverThresholdLow, liverThresholdHigh;
+			liverThresholdLow = liverThresholdHigh = 0;
+			MeshType::Pointer triangleMesh = km::simplexMeshToTriangleMesh<MeshType, MeshType>( mesh );
+			typedef itk::Image<unsigned char, ImageType::ImageDimension> MaskImageType;
+			MaskImageType::Pointer mask = km::generateBinaryFromMesh<MeshType, MaskImageType, ImageType>( triangleMesh, this->inputImage );
+			ImageType::Pointer roi = km::maskImage<ImageType, MaskImageType>( this->inputImage, mask );
+			const double statisticMin = 15.0;
+			const double statisticMax = 300.0;
+			const double binWidth = 3.0;
+			const double thresholdSpan = 30;
+			Histogram histogram(statisticMin, statisticMax, binWidth);
+			km::calculateHistogram<ImageType>(roi, &histogram);
+			double minLiverTissueRatio = 0.85;
+			do {
+				double thtmp1, thtmp2;
+				histogram.calcThresholdOfRatio(minLiverTissueRatio + 0.05, thtmp1, thtmp2);
+				liverThresholdLow = thtmp1;
+				liverThresholdHigh = thtmp2;
+				std::cout<<"<" <<thtmp1 << ", " <<thtmp2 <<  ">: "<< minLiverTissueRatio + 0.05 <<std::endl;
+				double thresholdDiff = thtmp2 - thtmp1;
+				if (thresholdDiff<thresholdSpan){
+					liverThresholdLow = thtmp1;
+					liverThresholdHigh = thtmp2;
+					minLiverTissueRatio += 0.05;
+				}else{
+					break;
+				}
+			} while (minLiverTissueRatio<0.95);
+
+			NormalDistribution newRange;
+			newRange.mu = (liverThresholdLow+liverThresholdHigh)/2;
+			newRange.sigma = ((liverThresholdHigh-liverThresholdLow)/2)/2.5;
+			globalIntenDist = newRange;
+
+			intensityDistributions[GLOBAL_POINT_ID] = newRange;
+			for (int i=0;i<mesh->GetNumberOfPoints();i++)
+			{
+				intensityDistributions[i] = newRange; //By default, all landmarks use global intensity threshold.
+			}
+
+			globalIntenDist.print();
+		}
+
+		km::NormalDistribution& getIntensityRange(int pointId)
+		{
+			return intensityDistributions[pointId];
+		}
+
 	private:
 		typename ImageType::ConstPointer inputImage;
 		typename LinearInterpolateImageFunctionType::Pointer linerInterpolatorFunc;
@@ -182,6 +354,11 @@ namespace km
 		PointType currentPoint;
 		VectorType offsetVector;
 		itk::SimplexMeshGeometry * geoData;
+
+		std::map<int, km::NormalDistribution> intensityDistributions;
+		NormalDistribution localIntenDist;
+		NormalDistribution globalIntenDist;
+		static const int GLOBAL_POINT_ID = -1;
 
 		void addPoints(PROFILE_CATEGORY profileCategory, int profile_dimension, double profile_spacing)
 		{
@@ -202,21 +379,12 @@ namespace km
 			}
 		}
 
-		double mappingItensity( double val )
-		{
-			double intensity = val;
-			intensity = intensity - 0.5*( g_liverThresholds[0].first + g_liverThresholds[0].second );
-
-			return intensity;
-		}
-
 		double extractIntensity( PointType & pt )
 		{
 			double grayValue = -1024;
 			if (this->linerInterpolatorFunc->IsInsideBuffer( pt ))
 			{
 				grayValue = this->linerInterpolatorFunc->Evaluate( pt );
-				grayValue = mappingItensity(grayValue);
 			}
 			return grayValue;
 		}
@@ -225,8 +393,30 @@ namespace km
 		{
 			for (int i=0;i<pointSet.size();i++)
 			{
-				double greyValue = extractIntensity(pointSet[i]);
-				featureSet.push_back(greyValue);
+				double grayValue = extractIntensity(pointSet[i]);
+				featureSet.push_back(grayValue - localIntenDist.mu);
+			}
+		}
+
+		void extractNormalizedIntensitySet( FeatureSetType & featureSet )
+		{
+			for (int i=0;i<pointSet.size();i++)
+			{
+				double grayValue = extractIntensity(pointSet[i]);
+				featureSet.push_back( (grayValue - localIntenDist.mu)/globalIntenDist.sigma );
+			}
+		}
+
+		void extractBinaryIntensitySet( FeatureSetType & featureSet )
+		{
+			for (int i=0;i<pointSet.size();i++)
+			{
+				double grayValue = extractIntensity(pointSet[i]);
+				if (grayValue<localIntenDist.mu-2.5*globalIntenDist.sigma || grayValue>localIntenDist.mu+2.5*globalIntenDist.sigma){
+					featureSet.push_back(0);
+				}else{
+					featureSet.push_back(1);
+				}
 			}
 		}
 
@@ -239,6 +429,7 @@ namespace km
 			for (int i=0;i<pointSet.size();i++)
 			{
 				double grayValue = extractIntensity(pointSet[i]);
+				grayValue -= localIntenDist.mu;
 
 				gray_list.push_back(grayValue);
 				featureSet.push_back(grayValue);
@@ -264,28 +455,6 @@ namespace km
 			}
 			gray_sd = std::sqrt( gray_sd / gray_list.size() );
 			featureSet.push_back(gray_sd);
-		}
-
-		void extractMean( FeatureSetType & featureSet )
-		{
-			double meanValue = -1024;
-			if (this->meanFunc->IsInsideBuffer(this->currentPoint))
-			{
-				meanValue = this->meanFunc->Evaluate(this->currentPoint);
-				meanValue = mappingItensity(meanValue);
-			}
-			featureSet.push_back(meanValue);
-		}
-
-		void extractMedian( FeatureSetType & featureSet )
-		{
-			double medianValue = -1024;
-			if (this->medianFunc->IsInsideBuffer(this->currentPoint))
-			{
-				medianValue = this->medianFunc->Evaluate(this->currentPoint);
-				medianValue = mappingItensity(medianValue);
-			}
-			featureSet.push_back(medianValue);
 		}
 
 		void extractGradient( FeatureSetType & featureSet )
@@ -317,7 +486,7 @@ namespace km
 			}
 		}
 
-		void extractGradientMoment( FeatureSetType & featureSet )
+		void extractGradientMoments( FeatureSetType & featureSet )
 		{
 			for (int i=0;i<pointSet.size();i++)
 			{
@@ -347,21 +516,6 @@ namespace km
 		void extractVarianceSet( FeatureSetType & featureSet )
 		{
 			featureSet.push_back(extractVariance(currentPoint));
-		}
-
-		void extractCoordinate( FeatureSetType & featureSet )
-		{
-			VectorType coordiOffset = this->currentPoint - g_liverCentroid;
-			for (int i=0;i<ImageDimension;i++)
-			{
-				featureSet.push_back(coordiOffset[i]);
-			}
-
-			VectorType coordiNormal = normal*coordiOffset.GetNorm();
-			for (int i=0;i<ImageDimension;i++)
-			{
-				featureSet.push_back(coordiNormal[i]);
-			}
 		}
 
 		void getCachedFeatures( FeatureSetType & featureSet, PROFILE_CATEGORY profileCategory, const OffsetValueType & offset )

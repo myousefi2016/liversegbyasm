@@ -4,14 +4,44 @@
 #include <sstream>
 #include <string>
 #include <fstream>
+#include <cmath>
+#include <vector>
 
 using namespace std;
 
 namespace km
 {
-	class Math
+	const double pi = 3.14159265;
+
+	class NormalDistribution
 	{
 	public:
+		double mu;
+		double sigma;
+
+		NormalDistribution(const double _mu, const double _sigma) : mu(_mu), sigma(_sigma) {}
+		NormalDistribution() : mu(0), sigma(1) {}
+
+		void set_mu(const double _mu){this->mu = _mu;}
+		void set_sigma(const double _sigma){this->sigma = _sigma;}
+
+		double pdf(const double x)
+		{
+			return exp( -1 * (x - mu) * (x - mu) / (2 * sigma * sigma)) / (sigma * sqrt(2 * pi));
+		}
+
+		double erf(const double x)
+		{
+			double y = 1.0 / ( 1.0 + 0.3275911 * x);   
+			return 1 - (((((
+				+ 1.061405429  * y
+				- 1.453152027) * y
+				+ 1.421413741) * y
+				- 0.284496736) * y 
+				+ 0.254829592) * y) 
+				* exp (-x * x);
+		}
+
 		static double cdf(double x)
 		{
 			// constants
@@ -35,21 +65,42 @@ namespace km
 			return 0.5*(1.0 + sign*y);
 		}
 
-		static double cdf_inside(double x)
-		{
-			if (x == 0)
-			{
-				return 0;
-			}
+		//double cdf(const double x)
+		//{
+		//	//// Integral from a to x;
+		//	//const double ninf = mu - 10 * sigma; // Dependent on the type of distribution, tune as appropriate
+		//	//double sum = 0;
+		//	//double n = 1e2; // tune for speed/accuracy
+		//	//double c = (x - ninf) / n;
 
-			return std::abs(cdf(x) - cdf(-x)); 
+		//	//for (double k = 1.; k < n-1; k++)
+		//	//	sum += pdf( ninf + k*c);
+
+		//	//return c * ((pdf(x) + pdf(ninf))/2 + sum);
+
+		//	return 0.5 * (1 + erf((x - mu) / (sigma * sqrt(2.))));
+		//}
+
+		double cdf_inside(const double x)
+		{
+			return std::abs(cdf(x)-cdf(x+2.0*(mu-x)));
 		}
 
-		static double cdf_outside(double x)
+		double cdf_outside(const double x)
 		{
-			return 1.0 - cdf_inside(x);
+			return std::abs(1.0 - cdf_inside(x));
+			//return std::min(0.0, 1.0 - cdf_inside(x));
 		}
-		
+
+		void print()
+		{
+			std::cout<<"[Normal Distribution] mu: "<<mu<<", sigma: "<<sigma<<std::endl;
+		}
+	};
+
+	class Math
+	{
+	public:
 		static double setToBetween(double val, double lowerBound, double upperBound)
 		{
 			if(val<lowerBound)

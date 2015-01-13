@@ -28,3 +28,6 @@ target_link_libraries (testDeformableSimplexMesh3DWithShapePriorFilter ${ITK_LIB
 
 add_executable (testACVD testACVD.cpp)
 target_link_libraries (testACVD ${ITK_LIBRARIES} ${VTK_LIBRARIES} ${KM_LIBRARIES})
+
+add_executable (testGlobalConfig testGlobalConfig.cpp)
+target_link_libraries (testGlobalConfig ${ITK_LIBRARIES} ${VTK_LIBRARIES} ${KM_LIBRARIES})

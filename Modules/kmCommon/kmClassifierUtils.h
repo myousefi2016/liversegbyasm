@@ -13,12 +13,14 @@
 
 namespace km
 {
-	template< class TMesh, class TProfileExtractor>
+	template< class TProfileExtractor>
 	class ClassifierUtils
 	{
 	public:
 		typedef typename km::ProfileClassifier ClassifierType;
-		typedef typename TMesh MeshType;
+		typedef typename TProfileExtractor ProfileExtractorType;
+
+		typedef typename ProfileExtractorType::MeshType MeshType;
 		typedef typename MeshType::PointType PointType;
 		typedef typename PointType::VectorType VectorType;
 
@@ -28,8 +30,6 @@ namespace km
 		//typedef typename KdTreeType::InstanceIdentifierVectorType                NeighborhoodIdentifierType;
 		//typedef std::map<int, SampleType::Pointer>                               SampleMapType;
 		//typedef std::map<int, TreeGeneratorType::Pointer>                        TreeGeneratorMapType;
-
-		typedef typename TProfileExtractor ProfileExtractorType;
 
 		typedef itk::SimplexMeshGeometry SimplexMeshGeometryType;
 
@@ -365,7 +365,7 @@ namespace km
 				if (m_ProfileExtractor->isInsideBuffer(curPos))
 				{
 					std::vector<FLOATTYPE> feature;
-					m_ProfileExtractor->extractFeatureSet(feature, m_RegionClassifier->profileCategory, geodata, curPos);
+					m_ProfileExtractor->extractFeatureSet(feature, m_RegionClassifier->profileCategory, geodata, curPos, pointId);
 
 					double classifiedVal = m_RegionClassifier->classify(feature,pointId);
 
@@ -382,7 +382,7 @@ namespace km
 				if (m_ProfileExtractor->isInsideBuffer(pttest))
 				{
 					std::vector<FLOATTYPE> feature;
-					m_ProfileExtractor->extractFeatureSet(feature, m_RegionClassifier->profileCategory, geodata, pttest);
+					m_ProfileExtractor->extractFeatureSet(feature, m_RegionClassifier->profileCategory, geodata, pttest, pointId);
 
 					double classifiedVal = m_RegionClassifier->classify(feature,pointId);
 
@@ -417,7 +417,7 @@ namespace km
 				if (this->m_ProfileExtractor->isInsideBuffer(pttest))
 				{
 					std::vector<FLOATTYPE> feature;
-					m_ProfileExtractor->extractFeatureSet(feature, this->m_BoundaryClassifier->profileCategory, geodata, pttest);
+					m_ProfileExtractor->extractFeatureSet(feature, this->m_BoundaryClassifier->profileCategory, geodata, pttest, pointId);
 
 					double boundaryProbability = this->m_BoundaryClassifier->classify(feature,pointId);
 					if (boundaryProbability>0.8 && boundaryProbability>boundaryProbabilityMax){

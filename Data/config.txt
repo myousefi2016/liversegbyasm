@@ -1,3 +1,46 @@
+//Profile configuration
+
+//Spacing used to re-sample input image.
+#resample_spacing
+2.0
+
+//Sigma used for calculate gradient
+#sigma
+1.0
+
+//Number of sample points on each profile.
+#profile_dim
+9
+
+//Distance between each sample point on each profile.
+#profile_spacing
+1.0
+
+//Distance shifted toward inside along normal direction during training.
+#shift_inside
+3.0
+
+//Distance shifted toward outside along normal direction during training.
+#shift_outside
+3.0
+
+//Random distance shifted near true boundary during training.
+#shift_boundary
+1.0
+
+//Number of inside sample points for each landmark.
+#number_of_inside_per_point
+3
+
+//Number of true boundary points for each landmark.
+#number_of_boundary_per_point
+6
+
+//Number of outside sample points for each landmark.
+#number_of_outside_per_point
+9
+
+//Fitting configuration
 #shape_penalty
 0.2
 

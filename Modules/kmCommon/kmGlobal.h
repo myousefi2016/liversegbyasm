@@ -6,7 +6,21 @@
 #define KM_DEBUG_PRINT(X,Y) std::cout<<"[DEBUG PRINT] "<<X<<":"<<(Y)<<std::endl;
 #define KM_DEBUG_PRINT_VALUE(X) std::cout<<"[DEBUG PRINT] "<<"X:"<<(X)<<std::endl;
 #define KM_PRINT_EXCEPTION(E) std::cout<<"[EXCEPTION] "<<(E)<<std::endl;
-#define KM_ASSERT(X) if(!(X)) std::cout<<"[ASSERT FAIL] "<<std::endl; 
+#define KM_ASSERT(X) if(!(X)) std::cout<<"[ASSERT FAIL] "<<std::endl;
+
+#define DEFINE_STATIC_GLOBAL_VARIABLE(varName, varType, varDefaultVal) \
+	static varType g_##varName = varDefaultVal;
+
+//Only support double, int, bool
+#define ASSIGN_GLOBAL_VARIABLE(varName, varType, varVal) \
+	g_##varName = (varType)varVal;
+
+#define READ_CONFIG_LINE(varName, varType, file, line) \
+	if (line == #varName) \
+{ \
+	getline (file,line); \
+	ASSIGN_GLOBAL_VARIABLE(varName, varType, atof(line.c_str()) ); \
+}
 
 #include "itkVector.h"
 #include "itkPoint.h"
@@ -14,8 +28,6 @@
 #include <map>
 #include <fstream>
 #include <string>
-
-#define RESAMPLE_SPACING 2.0
 
 #ifndef B_CLASS_TYPE
 typedef int BClassType;
@@ -42,7 +54,6 @@ enum PROFILE_CATEGORY
 	BOUNDARY = 0,
 	PLAIN,
 	LIVER,
-	COORDINATE,
 	DEFAULT
 };
 
@@ -59,8 +70,6 @@ namespace km
 				return PLAIN;
 			}else if (str.compare("LIVER") == 0){
 				return LIVER;
-			}else if (str.compare("COORDINATE") == 0){
-				return COORDINATE;
 			}else{
 				return DEFAULT;
 			}
@@ -74,31 +83,27 @@ namespace km
 				return "PLAIN";
 			}else if (category == LIVER){
 				return "LIVER";
-			}else if (category == COORDINATE){
-				return "COORDINATE";
 			}else{
 				return "DEFAUTL";
 			}
 		}
 	};
 
-	static double SIGMA = 1.0; //采样梯度profile时，计算梯度场采样的参数sigma
-	static int PROFILE_DIM = 9;
-	static double PROFILE_SPACING = 1.5; //毫米 PROFILE_LENTH/(PROFILE_DIM-1)
-	static double SHIFT_INSIDE = 3.0; //采样表面内profile时，样本从表面上向表面内偏移的距离
-	static double SHIFT_OUTSIDE = 3.0; //采样表面外profile时，样本从表面上向表面外偏移的距离
-	static double SHIFT_BOUNDARY = 1.0;
-	static int NUMBER_OF_INSIDE_PER_POINT = 3; // 在每个MESH点附近采样inside profile的数量。
-	static int NUMBER_OF_BOUNDARY_PER_POINT = 6; // 在每个MESH点附近采样boundary profile的数量。
-	static int NUMBER_OF_OUTSIDE_PER_POINT = 9; // 在每个MESH点附近采样outside profile的数量。
-
-	static PROCESS_PHASE g_phase;
-	static std::vector<std::pair<double, double>> g_liverThresholds;
-	static itk::Point<double> g_liverCentroid;
-	static double g_shape_penalty = 0.0;
-	static double g_fitting_error_threshold = 0.6;
-	static bool   g_disable_abnormal = true;
 	static char   g_output_dir[1024];
+	static PROCESS_PHASE g_phase;
+
+	static double g_resample_spacing = 2.0; //Spacing used to re-sample input image.
+	static double g_sigma = 1.0; //Sigma used for calculate gradient
+	static int    g_profile_dim = 9; //Number of sample points on each profile.
+	static double g_profile_spacing = 1.0; //Distance between each sample point on each profile.
+	static double g_shift_inside = 3.0; //Distance shifted toward inside along normal direction during training.
+	static double g_shift_outside = 3.0; //Distance shifted toward outside along normal direction during training.
+	static double g_shift_boundary = 1.0; //Random distance shifted near true boundary during training.
+	static int    g_number_of_inside_per_point = 3; //Number of inside sample points for each landmark.
+	static int    g_number_of_boundary_per_point = 6; //Number of true boundary points for each landmark.
+	static int    g_number_of_outside_per_point = 9; //Number of outside sample points for each landmark.
+
+	static double g_shape_penalty = 0.0;
 	static int    g_number_clusters = 5;
 	static double g_cluster_min_dist = 5.0;
 	static int    g_number_principle_components = 17;
@@ -124,13 +129,6 @@ namespace km
 						if (line == "#shape_penalty"){
 							getline (myfile,line);
 							g_shape_penalty = atof( line.c_str() );
-						}else if (line == "#fitting_error_threshold"){
-							getline (myfile,line);
-							g_fitting_error_threshold = atof( line.c_str() );
-						}else if (line == "#disable_abnormal"){
-							getline (myfile,line);
-							double val = atof(line.c_str());
-							g_disable_abnormal = val>0?true:false;
 						}else if (line == "#number_clusters"){
 							getline (myfile,line);
 							g_number_clusters = atoi( line.c_str() );
@@ -155,9 +153,36 @@ namespace km
 						}else if (line == "#rigidity"){
 							getline (myfile,line);
 							g_rigidity = atoi( line.c_str() );
-						}else if (line == "#landmark_status_evalution"){
+						}else if (line == "#resample_spacing"){
 							getline (myfile,line);
-							g_landmark_status_evalution = (bool)atoi( line.c_str() );
+							g_resample_spacing = atof( line.c_str() );
+						}else if (line == "#sigma"){
+							getline (myfile,line);
+							g_sigma = atof( line.c_str() );
+						}else if (line == "#profile_dim"){
+							getline (myfile,line);
+							g_profile_dim = atoi( line.c_str() );
+						}else if (line == "#profile_spacing"){
+							getline (myfile,line);
+							g_profile_spacing = atof( line.c_str() );
+						}else if (line == "#shift_inside"){
+							getline (myfile,line);
+							g_shift_inside = atof( line.c_str() );
+						}else if (line == "#shift_outside"){
+							getline (myfile,line);
+							g_shift_outside = atof( line.c_str() );
+						}else if (line == "#shift_boundary"){
+							getline (myfile,line);
+							g_shift_boundary = atof( line.c_str() );
+						}else if (line == "#number_of_inside_per_point"){
+							getline (myfile,line);
+							g_number_of_inside_per_point = atoi( line.c_str() );
+						}else if (line == "#number_of_boundary_per_point"){
+							getline (myfile,line);
+							g_number_of_boundary_per_point = atoi( line.c_str() );
+						}else if (line == "#number_of_outside_per_point"){
+							getline (myfile,line);
+							g_number_of_outside_per_point = atoi( line.c_str() );
 						}
 					}
 					myfile.close();
@@ -169,10 +194,26 @@ namespace km
 			}
 
 			std::cout<<"[Global Config] shape_penalty: "<<g_shape_penalty<<std::endl;
-			std::cout<<"[Global Config] fitting_error_threshold: "<<g_fitting_error_threshold<<std::endl;
-			std::cout<<"[Global Config] diable_abnormal: "<<g_disable_abnormal<<std::endl;
 			std::cout<<"[Global Config] number_clusters: "<<g_number_clusters<<std::endl;
 			std::cout<<"[Global Config] landmark_status_evalution: "<<g_landmark_status_evalution<<std::endl;
+			std::cout<<"[Global Config] alpha: "<<g_alpha<<std::endl;
+			std::cout<<"[Global Config] beta: "<<g_beta<<std::endl;
+			std::cout<<"[Global Config] kappa: "<<g_kappa<<std::endl;
+			std::cout<<"[Global Config] gamma: "<<g_gamma<<std::endl;
+			std::cout<<"[Global Config] rigidity: "<<g_rigidity<<std::endl;
+			std::cout<<"[Global Config] number_clusters: "<<g_number_clusters<<std::endl;
+			std::cout<<"[Global Config] cluster_min_dist: "<<g_cluster_min_dist<<std::endl;
+			std::cout<<"[Global Config] number_principle_components: "<<g_number_principle_components<<std::endl;
+			std::cout<<"[Global Config] resample_spacing: "<<g_resample_spacing<<std::endl;
+			std::cout<<"[Global Config] sigma: "<<g_sigma<<std::endl;
+			std::cout<<"[Global Config] profile_dim: "<<g_profile_dim<<std::endl;
+			std::cout<<"[Global Config] profile_spacing: "<<g_profile_spacing<<std::endl;
+			std::cout<<"[Global Config] shift_inside: "<<g_shift_inside<<std::endl;
+			std::cout<<"[Global Config] shift_outside: "<<g_shift_outside<<std::endl;
+			std::cout<<"[Global Config] shift_boundary: "<<g_shift_boundary<<std::endl;
+			std::cout<<"[Global Config] number_of_inside_per_point: "<<g_number_of_inside_per_point<<std::endl;
+			std::cout<<"[Global Config] number_of_boundary_per_point: "<<g_number_of_boundary_per_point<<std::endl;
+			std::cout<<"[Global Config] number_of_outside_per_point: "<<g_number_of_outside_per_point<<std::endl;
 		}
 	};
 }

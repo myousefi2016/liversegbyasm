@@ -95,7 +95,6 @@ namespace km
 
 		KM_DEBUG_INFO("Load config file...");
 		km::Config::loadConfig(configFile);
-		sprintf(g_output_dir, "%s", outputdir);
 
 		itk::TimeProbesCollectorBase chronometer;
 		itk::MemoryProbesCollectorBase memorymeter;
@@ -134,14 +133,14 @@ namespace km
 
 		KM_DEBUG_INFO("Down-sample input image..");
 		SpacingType downspac;
-		downspac.Fill( RESAMPLE_SPACING );
+		downspac.Fill( g_resample_spacing );
 		inputImage = km::resampleImage<ShortImageType>( inputImage, downspac, minval );
 
 		if(WRITE_MIDDLE_RESULT){
 			km::writeImage<ShortImageType>( outputdir, "inputImage-downsampled.nii.gz", inputImage );
 		}
 
-		double zdist = RESAMPLE_SPACING * inputImage->GetLargestPossibleRegion().GetSize()[2];
+		double zdist = g_resample_spacing * inputImage->GetLargestPossibleRegion().GetSize()[2];
 		if ( zdist > 400 ){
 			KM_DEBUG_INFO("ROI locating by template matching..");
 			inputImage = km::extractRoiByTemplateMatching<ShortImageType, ShortImageType>( inputImage, atlasImage );
@@ -403,28 +402,6 @@ namespace km
 		}
 
 		ComputeGeometry<MeshType>( deformedMesh );
-
-		if (true)
-		{
-			std::cout<<"*******************************************************************************"<<std::endl;
-			std::cout<<"**                                                                           **"<<std::endl;
-			std::cout<<"**                                                                           **"<<std::endl;
-			std::cout<<"**            Tumor detection                                                **"<<std::endl;
-			std::cout<<"**                                                                           **"<<std::endl;
-			std::cout<<"**                                                                           **"<<std::endl;
-			std::cout<<"*******************************************************************************"<<std::endl;
-
-			g_phase = TUMOR_DETECTION;
-
-			//km::detectLiverIntensityRangeIncludingTumor<ShortImageType, MeshType>( inputImage, deformedMesh, g_liverThresholds );
-			km::detectLiverIntensityRangeWithoutTumor<ShortImageType, MeshType>( inputImage, deformedMesh, g_liverThresholds );
-			KM_DEBUG_INFO( " Liver gray value range: " );
-			for(int i=0;i<g_liverThresholds.size();i++)
-			{
-				std::cout<<g_liverThresholds[i].first<<","<<g_liverThresholds[i].second<<std::endl;
-			}
-			std::cout<<std::endl;
-		}
 
 		if (flag_deformingByLiverProfile)
 		{

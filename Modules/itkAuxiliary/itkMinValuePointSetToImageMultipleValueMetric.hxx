@@ -128,6 +128,7 @@ MinValuePointSetToImageMultipleValueMetric< TFixedPointSet, TMovingPointSet >
 	derivative.Fill( 0 );
 
 	double shapeProbability = 0.0;
+	km::NormalDistribution shapeDistribution(0,1);
 	if (m_WeightForShapePenalty > 0)
 	{
 		double maxParam = 0.0;
@@ -137,7 +138,7 @@ MinValuePointSetToImageMultipleValueMetric< TFixedPointSet, TMovingPointSet >
 			//{
 			//	maxParam = std::abs(parameters[i]);
 			//}
-			shapeProbability += log( km::Math::cdf_outside(std::abs(parameters[i])) + 1e-10 );
+			shapeProbability += log( shapeDistribution.cdf_outside(std::abs(parameters[i])) + 1e-10 );
 		}
 		shapeProbability /= m_NumberOfShapeParameters;
 		//1e-6 is make sure the log take positive input.
