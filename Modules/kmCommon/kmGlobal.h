@@ -153,6 +153,9 @@ namespace km
 						}else if (line == "#rigidity"){
 							getline (myfile,line);
 							g_rigidity = atoi( line.c_str() );
+						}else if (line == "#landmark_status_evalution"){
+							getline (myfile,line);
+							g_landmark_status_evalution = (bool)(atoi(line.c_str()));
 						}else if (line == "#resample_spacing"){
 							getline (myfile,line);
 							g_resample_spacing = atof( line.c_str() );

@@ -17,7 +17,7 @@
 
 int main(int argc, char* argv[])
 {
-	if( argc < 5 )
+	if( argc < 6 )
 	{
 		std::cerr<<"Usage:   origDataList meshList referenceGeometry configFile OutputDir"<<std::endl;
 		return EXIT_FAILURE;

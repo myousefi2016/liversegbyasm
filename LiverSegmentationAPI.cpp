@@ -95,6 +95,7 @@ namespace km
 
 		KM_DEBUG_INFO("Load config file...");
 		km::Config::loadConfig(configFile);
+		sprintf(g_output_dir, "%s", outputdir);
 
 		itk::TimeProbesCollectorBase chronometer;
 		itk::MemoryProbesCollectorBase memorymeter;

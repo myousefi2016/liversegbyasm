@@ -6,7 +6,7 @@
 
 //Sigma used for calculate gradient
 #sigma
-1.0
+2.0
 
 //Number of sample points on each profile.
 #profile_dim
@@ -14,7 +14,7 @@
 
 //Distance between each sample point on each profile.
 #profile_spacing
-1.0
+1.5
 
 //Distance shifted toward inside along normal direction during training.
 #shift_inside
@@ -38,7 +38,7 @@
 
 //Number of outside sample points for each landmark.
 #number_of_outside_per_point
-9
+6
 
 //Fitting configuration
 #shape_penalty
